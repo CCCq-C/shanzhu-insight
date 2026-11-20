@@ -167,6 +167,22 @@ test('collectXiaohongshu keeps the first page when protected pagination is rejec
   assert.deepEqual(result.warnings, ['笔记后续分页请求被平台拒绝']);
 });
 
+test('collectXiaohongshu keeps basic metrics when content analysis is unavailable', async () => {
+  const { context } = fakeContext({ analysisError: new Error('HTTP 404') });
+
+  const result = await collectXiaohongshu({
+    context,
+    since: new Date('2026-11-01T00:00:00.000Z'),
+    limit: postedFixture.data.notes.length,
+    now: new Date('2026-11-20T00:00:00.000Z')
+  });
+
+  assert.equal(result.posts.length, postedFixture.data.notes.length);
+  assert.equal(result.metrics[0].views, postedFixture.data.notes[0].view_count);
+  assert.equal(result.metrics[0].averageWatchSeconds, null);
+  assert.deepEqual(result.warnings, ['内容深度指标暂不可用']);
+});
+
 test('xiaohongshuCollector reports login redirects', async () => {
   const page = {
     goto: async () => {},
@@ -179,7 +195,7 @@ test('xiaohongshuCollector reports login redirects', async () => {
   }), { ok: false, reason: 'Login required' });
 });
 
-function fakeContext({ firstPage = postedFixture, secondPage, paginationError } = {}) {
+function fakeContext({ firstPage = postedFixture, secondPage, paginationError, analysisError } = {}) {
   const requestedUrls = [];
   const firstUrl = 'https://creator.xiaohongshu.com/api/galaxy/v2/creator/note/user/posted?tab=0&page=0';
   const response = {
@@ -196,6 +212,7 @@ function fakeContext({ firstPage = postedFixture, secondPage, paginationError } 
       requestedUrls.push(url);
       if (url.includes('/api/galaxy/user/info')) return structuredClone(fansFixture.userInfo);
       if (url.includes('/fans/overall_new')) return structuredClone(fansFixture.fans);
+      if (url.includes('/note/analyze/list') && analysisError) throw analysisError;
       if (url.includes('/note/analyze/list')) return structuredClone(analysisFixture);
       if (url.includes('/note/user/posted') && paginationError) throw paginationError;
       if (url.includes('/note/user/posted') && secondPage) return structuredClone(secondPage);

@@ -106,7 +106,13 @@ export async function collectXiaohongshu({ context, since, limit = 100, now = ne
     const [userPayload, fansPayload, analysisPayload] = await Promise.all([
       fetchJson(page, USER_PATH),
       fetchJson(page, FANS_PATH),
-      fetchJson(page, analysisUrl(since, now))
+      fetchJson(page, analysisUrl(since, now)).then(payload => {
+        assertSuccessful(payload);
+        return payload;
+      }).catch(() => {
+        warnings.push('内容深度指标暂不可用');
+        return null;
+      })
     ]);
     const account = parseXiaohongshuFans([userPayload, fansPayload]);
 
