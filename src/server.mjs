@@ -131,6 +131,7 @@ function staticPath(pathname, webRoot) {
     '/content': ['content.html', 'text/html; charset=utf-8'],
     '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
     '/content.js': ['content.js', 'text/javascript; charset=utf-8'],
+    '/shared.js': ['shared.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
     '/vendor/echarts.min.js': [path.join(config.projectRoot, 'node_modules', 'echarts', 'dist', 'echarts.min.js'), 'text/javascript; charset=utf-8']
   };

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>麦田洞察 · 创作者数据看板</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="麦田洞察首页">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>麦田洞察</span>
+      <small>CREATOR INTELLIGENCE</small>
+    </a>
+    <nav class="main-nav" aria-label="主要导航">
+      <a class="active" href="/" aria-current="page">大屏</a>
+      <a href="/content">内容</a>
+    </nav>
+    <div class="topbar-actions">
+      <div class="system-status" id="header-status" aria-label="平台状态"></div>
+      <div class="updated-at"><span>最近更新</span><strong id="last-updated">尚未采集</strong></div>
+      <button class="primary-button" id="collect-now" type="button">立即采集</button>
+    </div>
+  </header>
+
+  <main id="main-content" class="dashboard-shell">
+    <section class="hero-grid" aria-label="核心数据">
+      <article class="panel latest-panel" id="latest-content">
+        <div class="section-heading">
+          <div><span class="eyebrow">最新发布</span><h1 id="latest-title">等待第一次采集</h1></div>
+          <span class="issue-badge" id="latest-date">—</span>
+        </div>
+        <div class="latest-layout">
+          <div class="cover-stage" id="cover-stage">
+            <div class="cover-card" id="cover-card">
+              <div class="cover-placeholder" id="cover-placeholder"><span>麦田</span><small>等待封面</small></div>
+              <img id="latest-cover" alt="最新内容封面" hidden>
+              <span class="cover-shine" aria-hidden="true"></span>
+            </div>
+            <span class="publish-badge" id="publish-badge">0/3 平台</span>
+          </div>
+          <div class="latest-summary">
+            <div class="platform-metrics" id="latest-platforms"></div>
+            <div class="metric-row">
+              <div><span>全平台播放</span><strong id="latest-views">—</strong></div>
+              <div><span>互动</span><strong id="latest-interactions">—</strong></div>
+              <div><span>互动率</span><strong id="latest-rate">未知</strong></div>
+            </div>
+            <div class="comparison-note" id="latest-comparison">采集后显示跨平台表现。</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel follower-panel">
+        <div class="section-heading compact">
+          <div><span class="eyebrow">粉丝资产</span><div class="hero-number" id="total-followers">—</div></div>
+          <span class="trend-chip" id="follower-change">近 7 天 —</span>
+        </div>
+        <div class="chart" id="followers-chart" role="img" aria-label="近 30 天平台粉丝趋势图"></div>
+      </article>
+
+      <article class="panel insight-panel">
+        <div class="section-heading compact">
+          <div><span class="eyebrow">数据分析</span><h2>值得关注</h2></div>
+          <span class="auto-label">规则自动计算</span>
+        </div>
+        <div class="insights-list" id="insights-list" aria-live="polite">
+          <div class="empty-block">有足够数据后，自动生成可解释洞察。</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="section-block" aria-labelledby="platform-title">
+      <div class="block-heading"><div><span class="eyebrow">账号健康度</span><h2 id="platform-title">三个平台，一眼看清</h2></div><a href="/content">查看内容明细</a></div>
+      <div class="platform-grid" id="platform-grid"></div>
+    </section>
+
+    <section class="panel comparison-panel" aria-labelledby="comparison-title">
+      <div class="section-heading compact">
+        <div><span class="eyebrow">内容表现</span><h2 id="comparison-title">最近内容跨平台播放</h2></div>
+        <span class="auto-label">最近 8 条</span>
+      </div>
+      <div class="chart comparison-chart" id="comparison-chart" role="img" aria-label="最近内容各平台播放量对比柱状图"></div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/vendor/echarts.min.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -286,19 +286,68 @@ export function getContents(db, filters = {}) {
 }
 
 export function getOverview(db, now = new Date()) {
-  const row = db.prepare(`
-    SELECT COALESCE(SUM(s.followers), 0) AS total_followers
-    FROM account_snapshots s
-    WHERE s.snapshot_date = (
-      SELECT MAX(latest.snapshot_date)
-      FROM account_snapshots latest
-      WHERE latest.platform = s.platform
-    )
-  `).get();
+  const current = new Date(now);
+  const historyStart = formatDate(new Date(current.getTime() - 29 * 24 * 60 * 60 * 1000));
+  const sevenDayStart = formatDate(new Date(current.getTime() - 6 * 24 * 60 * 60 * 1000));
+  const accountRows = db.prepare(`
+    SELECT a.platform, a.display_name, a.avatar_url, s.followers, s.captured_at
+    FROM accounts a
+    LEFT JOIN account_snapshots s
+      ON s.platform = a.platform
+      AND s.snapshot_date = (
+        SELECT MAX(latest.snapshot_date)
+        FROM account_snapshots latest
+        WHERE latest.platform = a.platform
+      )
+  `).all();
+  const historyRows = db.prepare(`
+    SELECT platform, snapshot_date, followers
+    FROM account_snapshots
+    WHERE snapshot_date >= ?
+    ORDER BY snapshot_date
+  `).all(historyStart);
+  const latestRuns = db.prepare(`
+    SELECT platform, status, finished_at, partial
+    FROM collector_runs runs
+    WHERE id = (SELECT MAX(latest.id) FROM collector_runs latest WHERE latest.platform = runs.platform)
+  `).all();
+  const runByPlatform = new Map(latestRuns.map(run => [run.platform, run]));
+  const historyByPlatform = new Map();
+  for (const row of historyRows) {
+    if (!historyByPlatform.has(row.platform)) historyByPlatform.set(row.platform, []);
+    historyByPlatform.get(row.platform).push({ date: row.snapshot_date, followers: row.followers });
+  }
+  const order = new Map(['xiaohongshu', 'douyin', 'channels'].map((platform, index) => [platform, index]));
+  const platforms = accountRows.map(account => {
+    const history = historyByPlatform.get(account.platform) ?? [];
+    const currentFollowers = account.followers == null ? null : Number(account.followers);
+    const baseline = history.find(point => point.date >= sevenDayStart)?.followers;
+    const run = runByPlatform.get(account.platform);
+    return {
+      platform: account.platform,
+      displayName: account.display_name,
+      avatarUrl: account.avatar_url,
+      followers: currentFollowers,
+      followerChange7d: currentFollowers == null || baseline == null ? null : currentFollowers - Number(baseline),
+      history,
+      status: run?.status ?? 'unknown',
+      partial: Boolean(run?.partial),
+      lastCollectedAt: run?.finished_at ?? account.captured_at ?? null
+    };
+  }).sort((left, right) => (order.get(left.platform) ?? 99) - (order.get(right.platform) ?? 99));
+  const recentContents = getContents(db, {}).slice(0, 12);
+  const lastCollectedAt = platforms.map(platform => platform.lastCollectedAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1) ?? null;
 
   return {
-    asOf: new Date(now).toISOString(),
-    totalFollowers: Number(row.total_followers)
+    asOf: current.toISOString(),
+    lastCollectedAt,
+    totalFollowers: platforms.reduce((sum, platform) => sum + (platform.followers ?? 0), 0),
+    platforms,
+    latestContent: recentContents[0] ?? null,
+    recentContents
   };
 }
 
