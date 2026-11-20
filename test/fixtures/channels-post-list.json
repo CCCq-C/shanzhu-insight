@@ -11,6 +11,9 @@
         "favCount": 42,
         "commentCount": 7,
         "forwardAggregationCount": 5,
+        "fullPlayRate": 0.28,
+        "avgPlayTimeSec": 17.25,
+        "followCount": 6,
         "desc": {
           "description": "AI 产品经理快速入门",
           "shortTitle": [],

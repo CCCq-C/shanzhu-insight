@@ -31,7 +31,15 @@ test('parseDouyinWorkList maps structured work metrics and cursor pagination', (
     likes: 80,
     comments: 12,
     favorites: 35,
-    shares: 9
+    shares: 9,
+    durationSeconds: 42,
+    averageWatchSeconds: 18.5,
+    completionRate: 0.21,
+    fiveSecondCompletionRate: 0.63,
+    twoSecondBounceRate: 0.17,
+    impressions: null,
+    coverClickRate: null,
+    followersGained: 12
   });
 });
 
@@ -44,12 +52,35 @@ test('parseDouyinWorkList preserves absent metrics as null', () => {
     likes: 20,
     comments: 3,
     favorites: null,
-    shares: null
+    shares: null,
+    durationSeconds: 30,
+    averageWatchSeconds: null,
+    completionRate: null,
+    fiveSecondCompletionRate: null,
+    twoSecondBounceRate: null,
+    impressions: null,
+    coverClickRate: null,
+    followersGained: null
   });
 });
 
-test('parseDouyinAccount maps the owner account without storing private payloads', () => {
-  assert.deepEqual(parseDouyinAccount([accountFixture.userInfo, accountFixture.overview]), {
+test('parseDouyinWorkList prefers exact string aweme IDs over rounded item numbers', () => {
+  const payload = {
+    status_code: 0,
+    items: [{
+      id: 7710071844748987000,
+      description: '大整数作品',
+      create_time: 1794988800,
+      metrics: { view_count: 1 }
+    }],
+    aweme_list: [{ aweme_id: '7710071844748987658', create_time: 1794988800 }]
+  };
+
+  assert.equal(parseDouyinWorkList(payload).posts[0].postId, '7710071844748987658');
+});
+
+test('parseDouyinAccount maps the owner account and real follower history', () => {
+  assert.deepEqual(parseDouyinAccount([accountFixture.userInfo, accountFixture.overview, accountFixture.fansHistory]), {
     account: {
       platformAccountId: 'dy-account-001',
       displayName: '示例创作者',
@@ -59,7 +90,11 @@ test('parseDouyinAccount maps the owner account without storing private payloads
       followers: 128,
       following: 18,
       likesReceived: 2400
-    }
+    },
+    accountHistory: [
+      { date: '2026-11-19', followers: 124 },
+      { date: '2026-11-20', followers: 128 }
+    ]
   });
 });
 
@@ -91,6 +126,7 @@ test('collectDouyin captures the first response and fetches later cursor pages i
   assert.equal(result.partial, false);
   assert.equal(requestedUrls.some(url => url.includes('max_cursor=cursor-2')), true);
   assert.equal(result.accountSnapshot.followers, 128);
+  assert.equal(result.accountHistory.length, 2);
 });
 
 test('collectDouyin stops at 100 items and marks the result partial', async () => {
@@ -148,6 +184,7 @@ function fakeContext({ firstPage = workFixture, secondPage } = {}) {
       requestedUrls.push(url);
       if (url.includes('/web/api/media/user/info/')) return structuredClone(accountFixture.userInfo);
       if (url.includes('/overview/all/')) return structuredClone(accountFixture.overview);
+      if (url.includes('/dashboard/fans')) return structuredClone(accountFixture.fansHistory);
       if (url.includes('/work_list') && secondPage) return structuredClone(secondPage);
       throw new Error(`Unexpected URL: ${url}`);
     },

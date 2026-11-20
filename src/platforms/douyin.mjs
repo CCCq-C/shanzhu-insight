@@ -3,6 +3,7 @@ const WORKS_URL = 'https://creator.douyin.com/creator-micro/content/manage';
 const WORK_LIST_PATH = '/janus/douyin/creator/pc/work_list';
 const USER_PATH = '/web/api/media/user/info/';
 const OVERVIEW_PATH = '/aweme/janus/creator/data/overview/all/?last_days_type=1';
+const FANS_HISTORY_PATH = '/janus/douyin/creator/data/overview/dashboard/fans?recent_days=30';
 
 export const douyinCollector = {
   platform: 'douyin',
@@ -17,17 +18,11 @@ export function parseDouyinWorkList(payload) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const awemes = Array.isArray(payload?.aweme_list) ? payload.aweme_list : [];
   const byId = new Map();
-
-  for (const item of items) {
-    const id = identifier(item?.id ?? item?.item_id);
-    if (id) byId.set(id, { item, aweme: null });
-  }
-  for (const aweme of awemes) {
-    const id = identifier(aweme?.item_id ?? aweme?.aweme_id);
-    if (!id) continue;
-    const entry = byId.get(id) ?? { item: null, aweme: null };
-    entry.aweme = aweme;
-    byId.set(id, entry);
+  for (let index = 0; index < Math.max(items.length, awemes.length); index += 1) {
+    const item = items[index] ?? null;
+    const aweme = awemes[index] ?? null;
+    const id = identifier(aweme?.aweme_id ?? aweme?.item_id ?? item?.item_id ?? item?.id);
+    if (id) byId.set(id, { item, aweme });
   }
 
   const posts = [];
@@ -54,7 +49,15 @@ export function parseDouyinWorkList(payload) {
       likes: metric(itemMetrics.like_count ?? statistics.digg_count),
       comments: metric(itemMetrics.comment_count ?? statistics.comment_count),
       favorites: metric(itemMetrics.favorite_count ?? statistics.collect_count),
-      shares: metric(itemMetrics.share_count ?? statistics.share_count)
+      shares: metric(itemMetrics.share_count ?? statistics.share_count),
+      durationSeconds: millisecondsToSeconds(item?.video_info?.duration ?? aweme?.duration ?? aweme?.video?.duration),
+      averageWatchSeconds: numberMetric(itemMetrics.avg_view_second),
+      completionRate: numberMetric(itemMetrics.completion_rate),
+      fiveSecondCompletionRate: numberMetric(itemMetrics.completion_rate_5s),
+      twoSecondBounceRate: numberMetric(itemMetrics.bounce_rate_2s),
+      impressions: null,
+      coverClickRate: null,
+      followersGained: metric(itemMetrics.subscribe_count)
     });
   }
 
@@ -68,9 +71,10 @@ export function parseDouyinWorkList(payload) {
 }
 
 export function parseDouyinAccount(payloads) {
-  const [userPayload, overviewPayload] = Array.isArray(payloads) ? payloads : [];
+  const [userPayload, overviewPayload, historyPayload] = Array.isArray(payloads) ? payloads : [];
   assertSuccessful(userPayload);
   assertSuccessful(overviewPayload);
+  if (historyPayload) assertSuccessful(historyPayload);
   const user = userPayload?.user;
   const platformAccountId = identifier(user?.uid ?? user?.sec_uid);
   if (!platformAccountId) throw new Error('Douyin account response is missing uid');
@@ -85,7 +89,8 @@ export function parseDouyinAccount(payloads) {
       followers: metric(user?.follower_count ?? overviewPayload?.data?.fans),
       following: metric(user?.following_count),
       likesReceived: metric(user?.total_favorited)
-    }
+    },
+    accountHistory: followerHistory(historyPayload)
   };
 }
 
@@ -102,7 +107,8 @@ export async function collectDouyin({ context, since, limit = 100 }) {
     const firstPayload = await firstResponse.json();
     const accountPayloads = await Promise.all([
       fetchJson(page, USER_PATH),
-      fetchJson(page, OVERVIEW_PATH)
+      fetchJson(page, OVERVIEW_PATH),
+      fetchJson(page, FANS_HISTORY_PATH)
     ]);
 
     const account = parseDouyinAccount(accountPayloads);
@@ -204,6 +210,26 @@ function metric(value) {
   if (value == null || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? Math.trunc(number) : null;
+}
+
+function numberMetric(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function millisecondsToSeconds(value) {
+  const number = numberMetric(value);
+  return number == null ? null : number / 1000;
+}
+
+function followerHistory(payload) {
+  const metrics = payload?.metrics ?? payload?.data?.metrics ?? [];
+  const total = metrics.find(row => row?.english_metric_name === 'total_fans_cnt');
+  return (total?.trends ?? []).map(point => ({
+    date: String(point.date_time).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3'),
+    followers: metric(point.value)
+  })).filter(point => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && point.followers != null);
 }
 
 function firstUrl(image) {

@@ -39,7 +39,15 @@ export function parseChannelsPostList(payload, { currentPage = 1 } = {}) {
       likes: metric(item?.favCount),
       comments: metric(item?.commentCount),
       favorites: null,
-      shares: metric(item?.forwardAggregationCount ?? item?.forwardCount)
+      shares: metric(item?.forwardAggregationCount ?? item?.forwardCount),
+      durationSeconds: millisecondsToSeconds(media.videoPlayLen),
+      averageWatchSeconds: numberMetric(item?.avgPlayTimeSec),
+      completionRate: numberMetric(item?.fullPlayRate),
+      fiveSecondCompletionRate: null,
+      twoSecondBounceRate: null,
+      impressions: null,
+      coverClickRate: null,
+      followersGained: metric(item?.followCount)
     });
   }
 
@@ -73,7 +81,11 @@ export function parseChannelsFans(payloads) {
       followers: metric(totals.at(-1)),
       following: null,
       likesReceived: null
-    }
+    },
+    accountHistory: (fansPayload?.data?.date ?? []).map((date, index) => ({
+      date: String(date),
+      followers: metric(totals[index])
+    })).filter(point => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && point.followers != null)
   };
 }
 
@@ -232,6 +244,17 @@ function metric(value) {
   if (value == null || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? Math.trunc(number) : null;
+}
+
+function numberMetric(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function millisecondsToSeconds(value) {
+  const number = numberMetric(value);
+  return number == null ? null : number / 1000;
 }
 
 function epochToIso(value) {

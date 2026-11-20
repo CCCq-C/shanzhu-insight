@@ -20,5 +20,18 @@
       "new_fans": 4,
       "play": 2200
     }
+  },
+  "fansHistory": {
+    "status_code": 0,
+    "metrics": [
+      {
+        "english_metric_name": "total_fans_cnt",
+        "metric_value": 128,
+        "trends": [
+          { "date_time": "20261119", "value": 124 },
+          { "date_time": "20261120", "value": 128 }
+        ]
+      }
+    ]
   }
 }

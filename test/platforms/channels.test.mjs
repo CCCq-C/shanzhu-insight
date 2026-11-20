@@ -31,7 +31,15 @@ test('parseChannelsPostList maps object identity, cover, publish time, and metri
     likes: 42,
     comments: 7,
     favorites: null,
-    shares: 5
+    shares: 5,
+    durationSeconds: 41,
+    averageWatchSeconds: 17.25,
+    completionRate: 0.28,
+    fiveSecondCompletionRate: null,
+    twoSecondBounceRate: null,
+    impressions: null,
+    coverClickRate: null,
+    followersGained: 6
   });
 });
 
@@ -45,7 +53,15 @@ test('parseChannelsPostList uses short title fallback and keeps absent metrics n
     likes: 11,
     comments: null,
     favorites: null,
-    shares: null
+    shares: null,
+    durationSeconds: 30,
+    averageWatchSeconds: null,
+    completionRate: null,
+    fiveSecondCompletionRate: null,
+    twoSecondBounceRate: null,
+    impressions: null,
+    coverClickRate: null,
+    followersGained: null
   });
 });
 
@@ -64,7 +80,11 @@ test('parseChannelsFans uses the latest total and local account identity', () =>
       followers: 47,
       following: null,
       likesReceived: null
-    }
+    },
+    accountHistory: [
+      { date: '2026-11-19', followers: 45 },
+      { date: '2026-11-20', followers: 47 }
+    ]
   });
 });
 

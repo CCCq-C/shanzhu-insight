@@ -11,9 +11,10 @@ import {
 
 const postedFixture = readFixture('xiaohongshu-posted.json');
 const fansFixture = readFixture('xiaohongshu-fans.json');
+const analysisFixture = readFixture('xiaohongshu-analysis.json');
 
 test('parseXiaohongshuPosted maps note identity, cover, publish time, and metrics', () => {
-  const result = parseXiaohongshuPosted(postedFixture);
+  const result = parseXiaohongshuPosted(postedFixture, analysisFixture);
 
   assert.equal(result.hasMore, true);
   assert.equal(result.nextPage, 2);
@@ -30,7 +31,15 @@ test('parseXiaohongshuPosted maps note identity, cover, publish time, and metric
     likes: 60,
     comments: 8,
     favorites: 22,
-    shares: 6
+    shares: 6,
+    durationSeconds: 42,
+    averageWatchSeconds: 16,
+    completionRate: null,
+    fiveSecondCompletionRate: null,
+    twoSecondBounceRate: null,
+    impressions: 2400,
+    coverClickRate: 0.125,
+    followersGained: 7
   });
 });
 
@@ -41,7 +50,15 @@ test('parseXiaohongshuPosted preserves absent metrics as null', () => {
     likes: 18,
     comments: 2,
     favorites: null,
-    shares: null
+    shares: null,
+    durationSeconds: null,
+    averageWatchSeconds: null,
+    completionRate: null,
+    fiveSecondCompletionRate: null,
+    twoSecondBounceRate: null,
+    impressions: null,
+    coverClickRate: null,
+    followersGained: null
   });
 });
 
@@ -56,7 +73,11 @@ test('parseXiaohongshuFans combines account identity and follower total', () => 
       followers: 50,
       following: null,
       likesReceived: null
-    }
+    },
+    accountHistory: [
+      { date: '2026-11-19', followers: 48 },
+      { date: '2026-11-20', followers: 50 }
+    ]
   });
 });
 
@@ -92,6 +113,7 @@ test('collectXiaohongshu captures first response and follows the returned page c
   assert.equal(result.partial, false);
   assert.equal(requestedUrls.some(url => url.includes('page=2')), true);
   assert.equal(result.accountSnapshot.followers, 50);
+  assert.equal(result.metrics[0].averageWatchSeconds, 16);
 });
 
 test('collectXiaohongshu stops at 100 items and marks remaining pages partial', async () => {
@@ -164,6 +186,7 @@ function fakeContext({ firstPage = postedFixture, secondPage, paginationError } 
       requestedUrls.push(url);
       if (url.includes('/api/galaxy/user/info')) return structuredClone(fansFixture.userInfo);
       if (url.includes('/fans/overall_new')) return structuredClone(fansFixture.fans);
+      if (url.includes('/note/analyze/list')) return structuredClone(analysisFixture);
       if (url.includes('/note/user/posted') && paginationError) throw paginationError;
       if (url.includes('/note/user/posted') && secondPage) return structuredClone(secondPage);
       throw new Error(`Unexpected URL: ${url}`);

@@ -3,6 +3,7 @@ const NOTES_URL = 'https://creator.xiaohongshu.com/new/note-manager';
 const POSTED_PATH = '/api/galaxy/v2/creator/note/user/posted';
 const USER_PATH = '/api/galaxy/user/info';
 const FANS_PATH = '/api/galaxy/creator/data/fans/overall_new';
+const ANALYSIS_PATH = '/api/galaxy/creator/datacenter/note/analyze/list';
 
 export const xiaohongshuCollector = {
   platform: 'xiaohongshu',
@@ -12,10 +13,12 @@ export const xiaohongshuCollector = {
   collect: collectXiaohongshu
 };
 
-export function parseXiaohongshuPosted(payload) {
+export function parseXiaohongshuPosted(payload, analysisPayload = null) {
   assertSuccessful(payload);
+  if (analysisPayload) assertSuccessful(analysisPayload);
   const data = payload?.data ?? {};
   const notes = Array.isArray(data.notes) ? data.notes : [];
+  const analysis = new Map((analysisPayload?.data?.note_infos ?? []).map(row => [String(row.id), row]));
   const posts = [];
   const metrics = [];
 
@@ -23,6 +26,7 @@ export function parseXiaohongshuPosted(payload) {
     const postId = identifier(note?.id ?? note?.note_id);
     const publishedAt = epochToIso(note?.visible_time ?? note?.time);
     if (!postId || !publishedAt) continue;
+    const detail = analysis.get(postId) ?? {};
     posts.push({
       postId,
       title: String(note?.display_title ?? note?.title ?? '').trim() || '未命名笔记',
@@ -32,11 +36,19 @@ export function parseXiaohongshuPosted(payload) {
     });
     metrics.push({
       postId,
-      views: metric(note?.view_count),
-      likes: metric(note?.likes),
-      comments: metric(note?.comments_count),
-      favorites: metric(note?.collected_count),
-      shares: metric(note?.shared_count)
+      views: metric(detail.read_count ?? note?.view_count),
+      likes: metric(detail.like_count ?? note?.likes),
+      comments: metric(detail.comment_count ?? note?.comments_count),
+      favorites: metric(detail.fav_count ?? note?.collected_count),
+      shares: metric(detail.share_count ?? note?.shared_count),
+      durationSeconds: numberMetric(note?.video_info?.duration),
+      averageWatchSeconds: numberMetric(detail.view_time_avg),
+      completionRate: null,
+      fiveSecondCompletionRate: null,
+      twoSecondBounceRate: null,
+      impressions: metric(detail.imp_count),
+      coverClickRate: numberMetric(detail.coverClickRate),
+      followersGained: metric(detail.increase_fans_count)
     });
   }
 
@@ -69,11 +81,15 @@ export function parseXiaohongshuFans(payloads) {
       followers: metric(thirty.fans_count),
       following: null,
       likesReceived: null
-    }
+    },
+    accountHistory: (thirty.fans_list ?? []).map(point => ({
+      date: epochDate(point.date),
+      followers: metric(point.count)
+    })).filter(point => point.date && point.followers != null)
   };
 }
 
-export async function collectXiaohongshu({ context, since, limit = 100 }) {
+export async function collectXiaohongshu({ context, since, limit = 100, now = new Date() }) {
   const page = await context.newPage();
   const warnings = [];
   try {
@@ -84,14 +100,16 @@ export async function collectXiaohongshu({ context, since, limit = 100 }) {
     await page.goto(NOTES_URL, { waitUntil: 'domcontentloaded' });
     const firstResponse = await responsePromise;
     const firstPayload = await firstResponse.json();
-    const account = parseXiaohongshuFans(await Promise.all([
+    const [userPayload, fansPayload, analysisPayload] = await Promise.all([
       fetchJson(page, USER_PATH),
-      fetchJson(page, FANS_PATH)
-    ]));
+      fetchJson(page, FANS_PATH),
+      fetchJson(page, analysisUrl(since, now))
+    ]);
+    const account = parseXiaohongshuFans([userPayload, fansPayload]);
 
     const allPosts = new Map();
     const allMetrics = new Map();
-    let parsed = parseXiaohongshuPosted(firstPayload);
+    let parsed = parseXiaohongshuPosted(firstPayload, analysisPayload);
     let reportedTotal = parsed.reportedTotal;
     let hasMore = parsed.hasMore;
     let nextPage = parsed.nextPage;
@@ -187,6 +205,29 @@ function metric(value) {
   if (value == null || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? Math.trunc(number) : null;
+}
+
+function numberMetric(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function epochDate(value) {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return new Date(number > 10_000_000_000 ? number : number * 1000).toISOString().slice(0, 10);
+}
+
+function analysisUrl(since, now) {
+  const url = new URL(ANALYSIS_PATH, HOME_URL);
+  url.searchParams.set('post_begin_time', String(new Date(since).getTime()));
+  url.searchParams.set('post_end_time', String(new Date(now).getTime()));
+  url.searchParams.set('type', '0');
+  url.searchParams.set('page_size', '100');
+  url.searchParams.set('page_num', '1');
+  return url.href;
 }
 
 function firstImageUrl(image) {

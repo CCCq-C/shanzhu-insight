@@ -1,0 +1,20 @@
+{
+  "code": 0,
+  "success": true,
+  "data": {
+    "note_infos": [
+      {
+        "id": "xhs-001",
+        "imp_count": 2400,
+        "read_count": 900,
+        "like_count": 60,
+        "comment_count": 8,
+        "fav_count": 22,
+        "share_count": 6,
+        "increase_fans_count": 7,
+        "view_time_avg": 16,
+        "coverClickRate": 0.125
+      }
+    ]
+  }
+}

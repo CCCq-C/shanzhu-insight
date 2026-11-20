@@ -13,6 +13,7 @@
         "images_list": [
           { "url": "https://example.test/xhs/cover-001.jpg" }
         ],
+        "video_info": { "duration": 42 },
         "view_count": 900,
         "likes": 60,
         "comments_count": 8,

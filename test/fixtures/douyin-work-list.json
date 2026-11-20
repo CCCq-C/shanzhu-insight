@@ -17,8 +17,14 @@
         "like_count": 80,
         "comment_count": 12,
         "favorite_count": 35,
-        "share_count": 9
-      }
+        "share_count": 9,
+        "avg_view_second": 18.5,
+        "completion_rate": 0.21,
+        "completion_rate_5s": 0.63,
+        "bounce_rate_2s": 0.17,
+        "subscribe_count": 12
+      },
+      "video_info": { "duration": 42000 }
     },
     {
       "id": "dy-002",

@@ -16,6 +16,7 @@
       "thirty": {
         "fans_count": 50,
         "fans_list": [
+          { "date": "2026-11-19", "count": 48 },
           { "date": "2026-11-20", "count": 50 }
         ],
         "rise_fans_count": 2,
