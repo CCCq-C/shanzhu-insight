@@ -7,6 +7,7 @@ const FANS_PATH = '/api/galaxy/creator/data/fans/overall_new';
 export const xiaohongshuCollector = {
   platform: 'xiaohongshu',
   loginUrl: HOME_URL,
+  isLoggedIn: isXiaohongshuLoggedIn,
   checkLogin: checkXiaohongshuLogin,
   collect: collectXiaohongshu
 };
@@ -143,12 +144,14 @@ async function checkXiaohongshuLogin({ context }) {
   const page = await context.newPage();
   try {
     await page.goto(HOME_URL, { waitUntil: 'domcontentloaded' });
-    return /\/login(?:[/?#]|$)/i.test(page.url())
-      ? { ok: false, reason: 'Login required' }
-      : { ok: true };
+    return isXiaohongshuLoggedIn(page) ? { ok: true } : { ok: false, reason: 'Login required' };
   } finally {
     await page.close();
   }
+}
+
+function isXiaohongshuLoggedIn(page) {
+  return !/\/login(?:[/?#]|$)/i.test(page.url());
 }
 
 function addPage(page, posts, metrics, limit) {

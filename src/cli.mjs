@@ -39,7 +39,7 @@ export async function diagnoseCollectors({ context, collectors = defaultCollecto
 function defaultCommands(write) {
   return {
     login: async () => {
-      const browser = await openPersistentBrowser();
+      const browser = await openPersistentBrowser({ headless: false });
       try {
         for (const collector of defaultCollectors) {
           const page = await browser.context.newPage();

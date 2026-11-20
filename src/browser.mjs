@@ -17,7 +17,7 @@ export function findChromeExecutable({
 export async function openPersistentBrowser({
   profileDir = config.profileDir,
   chromePath,
-  headless = false,
+  headless = true,
   launcher = chromium
 } = {}) {
   const executablePath = chromePath

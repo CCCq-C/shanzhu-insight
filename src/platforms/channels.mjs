@@ -7,6 +7,7 @@ const FANS_TREND_MARKER = '/statistic/fans_trend';
 export const channelsCollector = {
   platform: 'channels',
   loginUrl: HOME_URL,
+  isLoggedIn: isChannelsLoggedIn,
   checkLogin: checkChannelsLogin,
   collect: collectChannels
 };
@@ -157,15 +158,19 @@ async function checkChannelsLogin({ context }) {
   const page = await context.newPage();
   try {
     await page.goto(HOME_URL, { waitUntil: 'domcontentloaded' });
-    const loginVisible = /\/login(?:[/?#]|$)/i.test(page.url()) || await page.evaluate(() => {
-      const root = document.querySelector('wujie-app')?.shadowRoot ?? document;
-      const text = root.body?.innerText ?? root.textContent ?? '';
-      return /扫码登录|登录视频号助手|请登录/.test(text);
-    });
-    return loginVisible ? { ok: false, reason: 'Login required' } : { ok: true };
+    return await isChannelsLoggedIn(page) ? { ok: true } : { ok: false, reason: 'Login required' };
   } finally {
     await page.close();
   }
+}
+
+async function isChannelsLoggedIn(page) {
+  const loginVisible = /\/login(?:[/?#]|$)/i.test(page.url()) || await page.evaluate(() => {
+    const root = document.querySelector('wujie-app')?.shadowRoot ?? document;
+    const text = root.body?.innerText ?? root.textContent ?? '';
+    return /扫码登录|登录视频号助手|请登录/.test(text);
+  });
+  return !loginVisible;
 }
 
 function readIdentity(page) {

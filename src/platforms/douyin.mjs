@@ -7,6 +7,7 @@ const OVERVIEW_PATH = '/aweme/janus/creator/data/overview/all/?last_days_type=1'
 export const douyinCollector = {
   platform: 'douyin',
   loginUrl: HOME_URL,
+  isLoggedIn: isDouyinLoggedIn,
   checkLogin: checkDouyinLogin,
   collect: collectDouyin
 };
@@ -160,12 +161,14 @@ async function checkDouyinLogin({ context }) {
   const page = await context.newPage();
   try {
     await page.goto(HOME_URL, { waitUntil: 'domcontentloaded' });
-    return /\/login(?:[/?#]|$)/i.test(page.url())
-      ? { ok: false, reason: 'Login required' }
-      : { ok: true };
+    return isDouyinLoggedIn(page) ? { ok: true } : { ok: false, reason: 'Login required' };
   } finally {
     await page.close();
   }
+}
+
+function isDouyinLoggedIn(page) {
+  return !/\/login(?:[/?#]|$)/i.test(page.url());
 }
 
 function addPage(page, posts, metrics, limit) {

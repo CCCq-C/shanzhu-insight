@@ -43,7 +43,7 @@ test('openPersistentBrowser uses the selected profile and closes explicitly', as
   assert.equal(browser.context, context);
   assert.equal(launch.profile, profileDir);
   assert.equal(launch.options.executablePath, chromePath);
-  assert.equal(launch.options.headless, false);
+  assert.equal(launch.options.headless, true);
   await browser.close();
   assert.equal(closed, true);
 });
