@@ -50,12 +50,21 @@ test('dashboard HTML contains the approved information architecture', () => {
   assert.doesNotMatch(html, /<(?:script|link)[^>]+(?:src|href)=["']https?:/i);
 });
 
-test('content HTML contains platform and date filters', () => {
+test('content HTML contains filters and the deep comparison dialog', () => {
   const html = fs.readFileSync(new URL('content.html', webRoot), 'utf8');
 
   assert.match(html, /id=["']platform-filter["']/);
   assert.match(html, /id=["']date-filter["']/);
   assert.match(html, /id=["']content-list["']/);
+  for (const id of [
+    'content-insight-dialog',
+    'content-insight-title',
+    'content-insight-table',
+    'watch-progress-chart',
+    'interaction-rate-chart',
+    'follower-conversion-chart'
+  ]) assert.match(html, new RegExp(`id=["']${id}["']`));
+  assert.match(html, /\/vendor\/echarts\.min\.js/);
   assert.match(html, /<main/);
   assert.doesNotMatch(html, /<(?:script|link)[^>]+(?:src|href)=["']https?:/i);
 });

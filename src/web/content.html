@@ -40,6 +40,27 @@
     </section>
   </main>
 
+  <dialog class="insight-dialog" id="content-insight-dialog" aria-labelledby="content-insight-title">
+    <div class="insight-dialog-head">
+      <div><span class="eyebrow">CROSS-PLATFORM ACCEPTANCE</span><h2 id="content-insight-title">内容深度对比</h2><p id="content-insight-meta">正在载入三个平台的数据…</p></div>
+      <form method="dialog"><button class="dialog-close" type="submit" aria-label="关闭内容深度对比">×</button></form>
+    </div>
+    <div class="insight-dialog-body">
+      <div class="insight-table-wrap">
+        <table class="insight-table" id="content-insight-table">
+          <thead><tr><th>平台</th><th>平均观看</th><th>观看进度</th><th>完播率</th><th>5秒完播</th><th>2秒跳出</th><th>互动率</th><th>涨粉转化</th><th>曝光 / 点击</th></tr></thead>
+          <tbody><tr><td colspan="9">正在读取内容指标…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="insight-chart-grid">
+        <article><div><span class="eyebrow">RETENTION</span><h3>平均观看进度</h3></div><div class="insight-chart" id="watch-progress-chart" aria-label="三平台平均观看进度趋势图"></div></article>
+        <article><div><span class="eyebrow">ENGAGEMENT</span><h3>互动率</h3></div><div class="insight-chart" id="interaction-rate-chart" aria-label="三平台互动率趋势图"></div></article>
+        <article><div><span class="eyebrow">CONVERSION</span><h3>涨粉转化率</h3></div><div class="insight-chart" id="follower-conversion-chart" aria-label="三平台涨粉转化率趋势图"></div></article>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/vendor/echarts.min.js"></script>
   <script type="module" src="/content.js"></script>
 </body>
 </html>

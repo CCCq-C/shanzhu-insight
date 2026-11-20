@@ -154,6 +154,34 @@ test('content archive uses two-column magazine cards with visible platform metri
   assert.equal(mobileColumns, 1);
 });
 
+test('content comparison dialog renders three charts and explicit missing metrics', async t => {
+  const page = await contentPage(t);
+
+  await page.locator('[data-open-content]').first().click({ timeout: 1000 });
+  const dialog = page.locator('#content-insight-dialog[open]');
+  await dialog.waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('.insight-chart canvas').length === 3);
+
+  const desktop = await dialog.evaluate(element => ({
+    title: element.querySelector('#content-insight-title')?.textContent,
+    rows: element.querySelectorAll('#content-insight-table tbody tr').length,
+    charts: element.querySelectorAll('.insight-chart canvas').length,
+    missing: element.textContent.includes('平台未提供'),
+    width: element.getBoundingClientRect().width
+  }));
+  assert.match(desktop.title, /跨平台内容样片/);
+  assert.equal(desktop.rows, 3);
+  assert.equal(desktop.charts, 3);
+  assert.equal(desktop.missing, true);
+  assert.ok(desktop.width >= 900, `dialog width was ${desktop.width}px`);
+
+  await page.setViewportSize({ width: 760, height: 900 });
+  const mobileColumns = await page.locator('.insight-chart-grid').evaluate(element => (
+    getComputedStyle(element).gridTemplateColumns.split(' ').length
+  ));
+  assert.equal(mobileColumns, 1);
+});
+
 async function dashboardPage(t, { runCollection = async () => [], runLogin = async () => {}, setupDb = () => {} } = {}) {
   const db = openDatabase(':memory:');
   initSchema(db);
@@ -205,7 +233,15 @@ function contentCollection(platform, views) {
     likes: 10,
     comments: 2,
     favorites: 3,
-    shares: 1
+    shares: 1,
+    durationSeconds: 100,
+    averageWatchSeconds: platform === 'xiaohongshu' ? 32 : platform === 'douyin' ? 28 : 35,
+    completionRate: platform === 'xiaohongshu' ? null : .24,
+    fiveSecondCompletionRate: platform === 'douyin' ? .61 : null,
+    twoSecondBounceRate: platform === 'douyin' ? .18 : null,
+    impressions: platform === 'xiaohongshu' ? 600 : null,
+    coverClickRate: platform === 'xiaohongshu' ? .12 : null,
+    followersGained: 2
   }];
   if (platform === 'xiaohongshu') {
     posts.push({
@@ -221,7 +257,15 @@ function contentCollection(platform, views) {
       likes: 4,
       comments: 1,
       favorites: 2,
-      shares: 0
+      shares: 0,
+      durationSeconds: 80,
+      averageWatchSeconds: 20,
+      completionRate: null,
+      fiveSecondCompletionRate: null,
+      twoSecondBounceRate: null,
+      impressions: 300,
+      coverClickRate: .1,
+      followersGained: 1
     });
   }
   return {
