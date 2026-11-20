@@ -57,6 +57,7 @@ function renderLatest(overview) {
   document.querySelector('#latest-comparison').textContent = `${posts.length} 个平台合计 ${formatMetric(totals.views)} 次播放，互动率 ${formatRate(rate)}。`;
   if (content.coverPath) {
     const cover = document.querySelector('#latest-cover');
+    document.querySelector('#latest-content').style.setProperty('--cover-art', `url(${JSON.stringify(content.coverPath)})`);
     cover.src = content.coverPath;
     cover.hidden = false;
     document.querySelector('#cover-placeholder').hidden = true;
@@ -125,13 +126,14 @@ function renderComparison(overview) {
   const compact = matchMedia('(max-width: 520px)').matches;
   const chart = echarts.init(document.querySelector('#comparison-chart'), null, { renderer: 'svg' });
   chart.setOption({
-    animationDuration: 650,
+    animationDuration: 520,
+    animationEasing: 'cubicOut',
     color: Object.values(PLATFORMS).map(platform => platform.color),
     tooltip: { trigger: 'axis', borderWidth: 0, backgroundColor: 'rgba(29,29,31,.9)', textStyle: { color: '#fff', fontSize: 11 } },
     legend: { top: 4, right: 0, itemWidth: 9, itemHeight: 9, textStyle: { color: '#777780', fontSize: 10 } },
     grid: { left: 4, right: 4, top: 42, bottom: 8, containLabel: true },
-    xAxis: { type: 'category', data: contents.map(content => content.title), axisLine: { lineStyle: { color: '#E4E4E8' } }, axisTick: { show: false }, axisLabel: { color: '#92929A', fontSize: 9, rotate: compact ? 28 : 0, interval: compact ? 1 : 0, formatter: value => truncate(value, compact ? 5 : 9) } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#EEEEF1' } }, axisLabel: { color: '#9A9AA2', fontSize: 9 }, axisLine: { show: false }, axisTick: { show: false } },
+    xAxis: { type: 'category', data: contents.map(content => content.title), axisLine: { lineStyle: { color: '#E4E4E8' } }, axisTick: { show: false }, axisLabel: { color: '#818187', fontSize: 10, rotate: compact ? 28 : 0, interval: compact ? 1 : 0, formatter: value => truncate(value, compact ? 5 : 9) } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#EEEEF1' } }, axisLabel: { color: '#86868B', fontSize: 10 }, axisLine: { show: false }, axisTick: { show: false } },
     series: Object.entries(PLATFORMS).map(([key, platform]) => ({
       name: platform.name,
       type: 'bar',
@@ -147,13 +149,14 @@ function createLineChart(element, platforms) {
   const dates = [...new Set(platforms.flatMap(platform => platform.history.map(point => point.date)))].sort();
   const chart = echarts.init(element, null, { renderer: 'svg' });
   chart.setOption({
-    animationDuration: 650,
+    animationDuration: 520,
+    animationEasing: 'cubicOut',
     color: platforms.map(platform => PLATFORMS[platform.platform]?.color || '#73737B'),
     tooltip: { trigger: 'axis', borderWidth: 0, backgroundColor: 'rgba(29,29,31,.9)', textStyle: { color: '#fff', fontSize: 11 } },
     legend: { top: 3, right: 0, itemWidth: 8, itemHeight: 8, textStyle: { color: '#777780', fontSize: 10 } },
     grid: { top: 40, right: 8, bottom: 14, left: 5, containLabel: true },
-    xAxis: { type: 'category', boundaryGap: false, data: dates, axisLine: { lineStyle: { color: '#E4E4E8' } }, axisTick: { show: false }, axisLabel: { color: '#A0A0A8', fontSize: 9, formatter: value => value.slice(5) } },
-    yAxis: { type: 'value', scale: true, splitNumber: 4, splitLine: { lineStyle: { color: '#EEEEF1' } }, axisLabel: { color: '#A0A0A8', fontSize: 9 }, axisLine: { show: false }, axisTick: { show: false } },
+    xAxis: { type: 'category', boundaryGap: false, data: dates, axisLine: { lineStyle: { color: '#E4E4E8' } }, axisTick: { show: false }, axisLabel: { color: '#86868B', fontSize: 10, formatter: value => value.slice(5) } },
+    yAxis: { type: 'value', scale: true, splitNumber: 4, splitLine: { lineStyle: { color: '#EEEEF1' } }, axisLabel: { color: '#86868B', fontSize: 10 }, axisLine: { show: false }, axisTick: { show: false } },
     series: platforms.map(platform => ({ name: PLATFORMS[platform.platform]?.name || platform.platform, type: 'line', smooth: .3, symbol: 'circle', symbolSize: 5, showSymbol: false, lineStyle: { width: 2.5 }, areaStyle: { opacity: .06 }, data: dates.map(date => platform.history.find(point => point.date === date)?.followers ?? null) }))
   });
   return chart;
@@ -162,7 +165,8 @@ function createLineChart(element, platforms) {
 function createMiniChart(element, platform, color) {
   const chart = echarts.init(element, null, { renderer: 'svg' });
   chart.setOption({
-    animationDuration: 550,
+    animationDuration: 460,
+    animationEasing: 'cubicOut',
     grid: { inset: 0, left: 0, right: 0, top: 8, bottom: 0 },
     xAxis: { type: 'category', show: false, data: platform?.history.map(point => point.date) || [] },
     yAxis: { type: 'value', show: false, scale: true },
@@ -190,13 +194,23 @@ function enableCoverTilt() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const stage = document.querySelector('#cover-stage');
   const card = document.querySelector('#cover-card');
+  let frame = 0;
+  let nextTransform = '';
+  const render = () => {
+    frame = 0;
+    card.style.transform = nextTransform;
+  };
+  const schedule = transform => {
+    nextTransform = transform;
+    if (!frame) frame = requestAnimationFrame(render);
+  };
   stage.addEventListener('pointermove', event => {
     const box = stage.getBoundingClientRect();
     const x = (event.clientX - box.left) / box.width - .5;
     const y = (event.clientY - box.top) / box.height - .5;
-    card.style.transform = `rotateY(${x * 12}deg) rotateX(${-y * 8}deg) translateY(-3px)`;
+    schedule(`rotateY(${x * 10}deg) rotateX(${-y * 6}deg) translateY(-2px)`);
   });
-  stage.addEventListener('pointerleave', () => { card.style.transform = ''; });
+  stage.addEventListener('pointerleave', () => schedule(''));
 }
 
 function showToast(message) {

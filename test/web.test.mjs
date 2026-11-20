@@ -59,10 +59,11 @@ test('content HTML contains platform and date filters with expandable results', 
 test('styles use approved tokens and accessibility fallbacks', () => {
   const css = fs.readFileSync(new URL('styles.css', webRoot), 'utf8');
 
-  for (const token of ['#F4F4F6', '#FF2442', '#1D1D1F', '#FA9D3B', '#0071E3']) {
+  for (const token of ['#F5F5F7', '#FF2442', '#1D1D1F', '#FA9D3B', '#0071E3']) {
     assert.match(css.toUpperCase(), new RegExp(token.toUpperCase()));
   }
-  assert.match(css, /border-radius:\s*20px/);
+  assert.match(css, /--panel-radius:\s*20px/);
+  assert.match(css, /border-radius:\s*var\(--panel-radius\)/);
   assert.match(css, /:focus-visible/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
