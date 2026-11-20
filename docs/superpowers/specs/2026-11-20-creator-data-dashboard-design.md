@@ -76,6 +76,8 @@
 - `xhs-analytics`：小红书本人账号采集和本地分析。MIT。
 - `xiaohongshu-mcp`：只参考登录和页面访问方式；它不是创作者统计数据源。Apache-2.0。
 - `creator-platform-data`、`social-harvest`：只参考采集边界和字段映射，未确认许可证前不复制源码。
+- `self-media-uper`：参考小红书、视频号“让登录浏览器完成签名并拦截响应”的路线；仓库未见明确开源许可证，不复制源码。
+- `chrome-extension-antclaw`：参考视频号统计接口与分页行为。其许可证禁止再分发修改版，只记录行为证据，不复制代码。
 
 ## 7. 技术选择
 
@@ -88,6 +90,8 @@
 - Windows 任务计划程序每天运行一次 `collect`。
 
 不引入 React、Next.js、Tailwind、ORM、队列或后台框架。
+
+浏览器插件不是默认依赖。Playwright 的页面级响应监听能覆盖三个平台时，不开发插件。
 
 ## 8. 项目结构
 
@@ -171,6 +175,7 @@ node src/cli.mjs serve
 - 作品：内容管理页的作品列表响应。
 - 匹配：`aweme_id` 优先，标题只作回退。
 - 不再读取 React `__reactFiber`。
+- 2026-11-20 已用现有登录态实测 `/janus/douyin/creator/pc/work_list`：响应包含分页游标、封面、作品 ID、发布时间和完整 `statistics` / `metrics`。
 
 ### 小红书
 
@@ -178,6 +183,7 @@ node src/cli.mjs serve
 - 作品：笔记管理或内容分析页的列表响应。
 - 匹配：`note_id` 优先，标题只作回退。
 - 不再依赖 `.note-card__stat` 的固定顺序。
+- 2026-11-20 已用现有登录态实测 `/api/galaxy/v2/creator/note/user/posted`：响应包含分页、作品 ID、封面、发布时间、播放及互动数据。
 
 ### 视频号
 
@@ -185,6 +191,16 @@ node src/cli.mjs serve
 - 作品：作品管理页面响应。
 - 优先读取后台返回的 JSON；Shadow DOM 只用于发现登录状态和最后兜底。
 - 匹配：作品 ID 优先；拿不到 ID 时用标题首行与发布时间。
+
+### 插件触发条件
+
+视频号当前登录态已过期，因此还未完成实机响应验收。重新扫码后按以下顺序判断：
+
+1. Playwright `page.on('response')` 能拿到 `post/post_list`，不开发插件。
+2. 响应只存在于隔离子页面且 Playwright 无法读取，才新增最小 Manifest V3 插件。
+3. 插件只申请视频号后台域名、`scripting` 和本地服务权限。
+4. 插件只拦截作品与粉丝统计响应，发送脱敏字段到 `127.0.0.1`；不提供发布、互动或通用网页读取能力。
+5. 插件没有弹窗和独立产品界面，只作为视频号采集桥。
 
 ## 11. 数据模型
 
