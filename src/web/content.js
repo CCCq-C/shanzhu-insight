@@ -35,21 +35,31 @@ function renderContents(contents) {
   document.querySelector('#result-count').textContent = `${contents.length} 条内容`;
   document.querySelector('#content-list').innerHTML = contents.length ? contents.map(content => {
     const views = content.posts.reduce((sum, post) => sum + (post.metrics?.views || 0), 0);
-    const platforms = content.posts.map(post => PLATFORMS[post.platform]?.name || post.platform).join(' · ');
-    return `<details class="panel content-item">
-      <summary>
+    const postsByPlatform = new Map(content.posts.map(post => [post.platform, post]));
+    const title = content.title || '未命名内容';
+    return `<article class="panel content-item">
+      <div class="content-card-main">
         <div class="content-thumb">${content.coverPath ? `<img src="${escapeHtml(content.coverPath)}" alt="" loading="lazy">` : ''}</div>
-        <div class="content-copy"><h2>${escapeHtml(content.title || '未命名内容')}</h2><div class="content-meta"><span>${escapeHtml(formatDateTime(content.publishedAt))}</span><span>${escapeHtml(platforms || '无平台记录')}</span><span>${content.posts.length}/3 平台</span></div></div>
+        <div class="content-copy">
+          <div class="content-kicker"><span>${escapeHtml(formatDateTime(content.publishedAt))}</span><span>${content.posts.length}/3 平台已采集</span></div>
+          <h2 title="${escapeHtml(title)}">${escapeHtml(title)}</h2>
+          <div class="content-platforms">${Object.entries(PLATFORMS).map(([key, platform]) => `<span class="content-platform-chip${postsByPlatform.has(key) ? '' : ' is-missing'}"><i style="background:${platform.color}"></i>${platform.name}</span>`).join('')}</div>
+        </div>
         <div class="content-total"><span>全平台播放</span><strong>${formatMetric(views)}</strong></div>
-        <span class="expand-mark" aria-hidden="true"></span>
-      </summary>
-      <div class="content-detail"><div class="post-grid">${content.posts.map(renderPost).join('')}</div></div>
-    </details>`;
+      </div>
+      <div class="content-detail"><div class="post-grid">${Object.keys(PLATFORMS).map(key => renderPost(postsByPlatform.get(key), key)).join('')}</div></div>
+    </article>`;
   }).join('') : '<div class="panel empty-block">当前筛选条件没有内容。</div>';
 }
 
-function renderPost(post) {
-  const platform = PLATFORMS[post.platform] || { name: post.platform, short: '?', color: '#73737B' };
+function renderPost(post, platformKey) {
+  const platform = PLATFORMS[platformKey] || { name: platformKey, short: '?', color: '#73737B' };
+  if (!post) {
+    return `<article class="post-card is-empty">
+      <div class="post-card-head"><div class="platform-name"><span class="platform-icon" style="background:${platform.color}">${platform.short}</span>${platform.name}</div></div>
+      <span class="post-empty-label">未采集</span>
+    </article>`;
+  }
   const metrics = post.metrics || {};
   return `<article class="post-card">
     <div class="post-card-head"><div class="platform-name"><span class="platform-icon" style="background:${platform.color}">${platform.short}</span>${platform.name}</div>${post.url ? `<a href="${escapeHtml(post.url)}" target="_blank" rel="noreferrer">打开原文</a>` : ''}</div>

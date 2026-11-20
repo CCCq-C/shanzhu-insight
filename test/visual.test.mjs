@@ -4,7 +4,7 @@ import test from 'node:test';
 import { chromium } from 'playwright-core';
 
 import { findChromeExecutable } from '../src/browser.mjs';
-import { initSchema, openDatabase } from '../src/db.mjs';
+import { initSchema, openDatabase, saveCollection } from '../src/db.mjs';
 import { startServer } from '../src/server.mjs';
 
 test('dashboard renders crisp standard typography and compact surfaces', async t => {
@@ -55,6 +55,34 @@ test('cover tilt batches pointer movement into the next animation frame', async 
   assert.match(result.animated, /rotateY\(/);
 });
 
+test('content archive uses two-column magazine cards with visible platform metrics', async t => {
+  const page = await contentPage(t);
+  const desktop = await page.evaluate(() => {
+    const list = document.querySelector('#content-list');
+    const card = document.querySelector('.content-item');
+    const platformCards = [...card.querySelectorAll('.post-card')];
+    return {
+      columns: getComputedStyle(list).gridTemplateColumns.split(' ').length,
+      coverWidth: Number.parseFloat(getComputedStyle(card.querySelector('.content-thumb')).width),
+      platformCards: platformCards.length,
+      allPlatformsVisible: platformCards.every(item => item.getClientRects().length > 0),
+      cardTag: card.tagName
+    };
+  });
+
+  assert.equal(desktop.columns, 2);
+  assert.ok(desktop.coverWidth >= 100, `cover width was ${desktop.coverWidth}px`);
+  assert.equal(desktop.platformCards, 3);
+  assert.equal(desktop.allPlatformsVisible, true);
+  assert.equal(desktop.cardTag, 'ARTICLE');
+
+  await page.setViewportSize({ width: 760, height: 900 });
+  const mobileColumns = await page.locator('#content-list').evaluate(element => (
+    getComputedStyle(element).gridTemplateColumns.split(' ').length
+  ));
+  assert.equal(mobileColumns, 1);
+});
+
 async function dashboardPage(t) {
   const db = openDatabase(':memory:');
   initSchema(db);
@@ -68,4 +96,48 @@ async function dashboardPage(t) {
   });
   await page.goto(`http://127.0.0.1:${server.address().port}`, { waitUntil: 'networkidle' });
   return page;
+}
+
+async function contentPage(t) {
+  const db = openDatabase(':memory:');
+  initSchema(db);
+  for (const [platform, views] of [['xiaohongshu', 120], ['douyin', 350], ['channels', 230]]) {
+    saveCollection(db, contentCollection(platform, views), new Date('2026-11-20T04:00:00.000Z'));
+  }
+  const server = await startServer({ db, port: 0, runCollection: async () => [], write: () => {} });
+  const browser = await chromium.launch({ executablePath: findChromeExecutable(), headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  t.after(async () => {
+    await browser.close();
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    db.close();
+  });
+  await page.goto(`http://127.0.0.1:${server.address().port}/content`, { waitUntil: 'networkidle' });
+  return page;
+}
+
+function contentCollection(platform, views) {
+  return {
+    platform,
+    account: { platformAccountId: `${platform}-account`, displayName: platform, avatarUrl: null },
+    accountSnapshot: { followers: 10, following: null, likesReceived: null },
+    posts: [{
+      postId: `${platform}-post`,
+      title: '跨平台内容样片',
+      url: `https://example.test/${platform}`,
+      coverUrl: null,
+      publishedAt: '2026-11-20T02:00:00.000Z'
+    }],
+    metrics: [{
+      postId: `${platform}-post`,
+      views,
+      likes: 10,
+      comments: 2,
+      favorites: 3,
+      shares: 1
+    }],
+    reportedTotal: 1,
+    partial: false,
+    warnings: []
+  };
 }

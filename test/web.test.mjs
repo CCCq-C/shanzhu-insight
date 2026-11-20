@@ -46,7 +46,7 @@ test('dashboard HTML contains the approved information architecture', () => {
   assert.doesNotMatch(html, /<(?:script|link)[^>]+(?:src|href)=["']https?:/i);
 });
 
-test('content HTML contains platform and date filters with expandable results', () => {
+test('content HTML contains platform and date filters', () => {
   const html = fs.readFileSync(new URL('content.html', webRoot), 'utf8');
 
   assert.match(html, /id=["']platform-filter["']/);
