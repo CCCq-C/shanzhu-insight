@@ -30,11 +30,17 @@ test('overview and content APIs expose stored data and platform filters', async 
   assert.equal(overview.totalFollowers, 30);
   assert.equal(overview.platforms.length, 2);
   assert.equal(overview.platforms.find(row => row.platform === 'xiaohongshu').history.length, 1);
-  assert.equal(overview.latestContent.title, 'xiaohongshu title');
-  assert.equal(overview.recentContents.length, 2);
+  assert.deepEqual(
+    overview.latestContent.posts.map(post => post.platform).sort(),
+    ['douyin', 'xiaohongshu']
+  );
+  assert.equal(overview.recentContents.length, 1);
   assert.equal(contents.length, 1);
-  assert.equal(contents[0].posts[0].platform, 'xiaohongshu');
-  assert.equal(contents[0].posts[0].metrics.views, 200);
+  assert.deepEqual(
+    contents[0].posts.map(post => post.platform).sort(),
+    ['douyin', 'xiaohongshu']
+  );
+  assert.equal(contents[0].posts.find(post => post.platform === 'xiaohongshu').metrics.views, 200);
 });
 
 test('unknown routes return JSON 404 without exposing filesystem paths', async t => {

@@ -140,7 +140,7 @@ test('pairContent groups exact normalized titles published within 72 hours', () 
   assert.equal(second, first);
 });
 
-test('pairContent keeps matching titles separate outside 72 hours', () => {
+test('pairContent groups identical titles published eleven days apart', () => {
   const db = createDatabase();
   const first = pairContent(db, {
     title: '同一个选题',
@@ -150,11 +150,72 @@ test('pairContent keeps matching titles separate outside 72 hours', () => {
   const second = pairContent(db, {
     title: '同一个选题',
     coverUrl: null,
-    publishedAt: '2026-11-05T08:00:01.000Z'
+    publishedAt: '2026-11-12T08:00:01.000Z'
   });
 
-  assert.notEqual(second, first);
-  assert.equal(getContents(db, {}).length, 2);
+  assert.equal(second, first);
+  assert.equal(getContents(db, {}).length, 1);
+});
+
+test('saveCollection groups similar cross-platform copy into one content card', () => {
+  const db = createDatabase();
+  const posts = [
+    {
+      platform: 'xiaohongshu',
+      postId: 'xhs-1',
+      title: 'AI PM面试：转型后多负责什么？',
+      publishedAt: '2026-11-20T02:14:00.000Z'
+    },
+    {
+      platform: 'channels',
+      postId: 'channels-1',
+      title: '从传统PM转型AI PM，承担的工作发生了什么变化？变化不只是学习大模型和AI工具。真正重要的是把不稳定的AI能力变成稳定交付的产品。',
+      publishedAt: '2026-11-20T02:15:00.000Z'
+    },
+    {
+      platform: 'douyin',
+      postId: 'douyin-1',
+      title: '传统PM转AI PM，多做的不是写Prompt。真正增加的是组团队、划边界、做兜底、拆人机流程。AI PM还要对不确定性负责。',
+      publishedAt: '2026-11-20T02:16:00.000Z'
+    }
+  ];
+
+  for (const post of posts) {
+    saveCollection(db, result({
+      platform: post.platform,
+      account: { platformAccountId: `${post.platform}-account`, displayName: 'Creator', avatarUrl: null },
+      posts: [{ ...post, url: `https://example.test/${post.postId}`, coverUrl: null }],
+      metrics: [{ postId: post.postId, views: 100, likes: 5, comments: 1, favorites: 2, shares: 1 }]
+    }), new Date('2026-11-20T03:00:00.000Z'));
+  }
+
+  const contents = getContents(db, {});
+  assert.equal(contents.length, 1);
+  assert.deepEqual(contents[0].posts.map(post => post.platform), ['channels', 'douyin', 'xiaohongshu']);
+});
+
+test('initSchema reconciles previously split platform posts on restart', () => {
+  const db = createDatabase();
+  const insertContent = db.prepare('INSERT INTO contents (normalized_title, title, published_at) VALUES (?, ?, ?)');
+  const insertPost = db.prepare(`
+    INSERT INTO platform_posts (platform, post_id, content_id, title, published_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const titles = [
+    ['xiaohongshu', 'xhs-1', 'AI 创业正确路径，实践经验分享'],
+    ['douyin', 'douyin-1', 'AI 创业正确路径！半年实践经验分享。作为一个 AI 创业半年，有自己 AI 产品的创始人。'],
+    ['channels', 'channels-1', '作为一个 AI 创业半年，有自己 AI 产品的创始人。我想说很多想做 AI 创业的朋友，可能路径都搞错了。']
+  ];
+
+  for (const [index, [platform, postId, title]] of titles.entries()) {
+    const contentId = Number(insertContent.run(`split-${index}`, title, `2026-11-17T09:2${index}:00.000Z`).lastInsertRowid);
+    insertPost.run(platform, postId, contentId, title, `2026-11-17T09:2${index}:00.000Z`);
+  }
+
+  initSchema(db);
+  const contents = getContents(db, {});
+  assert.equal(contents.length, 1);
+  assert.equal(contents[0].posts.length, 3);
 });
 
 test('pairContent never groups generic placeholder titles', () => {

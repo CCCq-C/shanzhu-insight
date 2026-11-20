@@ -90,30 +90,146 @@ export function initSchema(db) {
       schema_version INTEGER NOT NULL DEFAULT 1
     );
   `);
+  reconcileContentGroups(db);
 }
 
 export function pairContent(db, post, platform = null) {
   const normalizedTitle = normalizeTitle(post.title);
   const publishedAt = new Date(post.publishedAt).toISOString();
-  const genericTitle = ['', '未命名作品', '无标题', '未命名内容'].includes(normalizedTitle);
-  const existing = genericTitle ? null : db.prepare(`
-    SELECT id
+  const genericTitle = isGenericTitle(normalizedTitle);
+  const candidates = genericTitle ? [] : db.prepare(`
+    SELECT id, title, published_at
     FROM contents
-    WHERE normalized_title = ?
-      AND ABS(julianday(published_at) - julianday(?)) <= 3
+    WHERE ABS(julianday(published_at) - julianday(?)) <= 30
       AND (? IS NULL OR NOT EXISTS (
         SELECT 1 FROM platform_posts p WHERE p.content_id = contents.id AND p.platform = ?
       ))
     ORDER BY ABS(julianday(published_at) - julianday(?)), id
-    LIMIT 1
-  `).get(normalizedTitle, publishedAt, platform, platform, publishedAt);
+  `).all(publishedAt, platform, platform, publishedAt);
+  const postsForContent = db.prepare('SELECT title, published_at FROM platform_posts WHERE content_id = ?');
+  let existing = null;
+  let confidence = 0;
+  for (const candidate of candidates) {
+    const variants = postsForContent.all(candidate.id);
+    if (!variants.length) variants.push({ title: candidate.title, published_at: candidate.published_at });
+    const score = Math.max(...variants.map(variant => contentMatchConfidence(
+      { title: post.title, publishedAt },
+      { title: variant.title, publishedAt: variant.published_at }
+    )));
+    if (score > confidence) {
+      existing = candidate;
+      confidence = score;
+    }
+  }
 
-  if (existing) return existing.id;
+  if (existing && confidence > 0) return existing.id;
 
   return Number(db.prepare(`
     INSERT INTO contents (normalized_title, title, cover_path, published_at)
     VALUES (?, ?, NULL, ?)
   `).run(normalizedTitle, post.title, publishedAt).lastInsertRowid);
+}
+
+function reconcileContentGroups(db) {
+  const rows = db.prepare(`
+    SELECT c.id, c.title AS content_title, c.published_at AS content_published_at,
+      p.platform, p.title, p.published_at
+    FROM contents c
+    LEFT JOIN platform_posts p ON p.content_id = c.id
+    ORDER BY c.published_at, c.id, p.platform
+  `).all();
+  const groups = [];
+  for (const row of rows) {
+    let group = groups.at(-1);
+    if (!group || group.id !== row.id) {
+      group = {
+        id: row.id,
+        contentTitle: row.content_title,
+        publishedAt: row.content_published_at,
+        posts: [],
+        platforms: new Set()
+      };
+      groups.push(group);
+    }
+    if (row.platform) {
+      group.posts.push({ title: row.title, publishedAt: row.published_at });
+      group.platforms.add(row.platform);
+    }
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let left = 0; left < groups.length && !changed; left += 1) {
+      for (let right = left + 1; right < groups.length; right += 1) {
+        if ([...groups[left].platforms].some(platform => groups[right].platforms.has(platform))) continue;
+        const leftPosts = groups[left].posts.length ? groups[left].posts : [{ title: groups[left].contentTitle, publishedAt: groups[left].publishedAt }];
+        const rightPosts = groups[right].posts.length ? groups[right].posts : [{ title: groups[right].contentTitle, publishedAt: groups[right].publishedAt }];
+        const matches = leftPosts.some(a => rightPosts.some(b => contentMatchConfidence(a, b) > 0));
+        if (!matches) continue;
+
+        const survivor = groups[left];
+        const duplicate = groups[right];
+        db.prepare('UPDATE platform_posts SET content_id = ? WHERE content_id = ?').run(survivor.id, duplicate.id);
+        db.prepare('DELETE FROM contents WHERE id = ?').run(duplicate.id);
+        survivor.posts.push(...duplicate.posts);
+        duplicate.platforms.forEach(platform => survivor.platforms.add(platform));
+        survivor.publishedAt = [survivor.publishedAt, duplicate.publishedAt].sort()[0];
+        survivor.contentTitle = preferredTitle(survivor.posts.map(post => post.title), survivor.contentTitle);
+        db.prepare(`
+          UPDATE contents SET normalized_title = ?, title = ?, published_at = ? WHERE id = ?
+        `).run(normalizeTitle(survivor.contentTitle), survivor.contentTitle, survivor.publishedAt, survivor.id);
+        groups.splice(right, 1);
+        changed = true;
+        break;
+      }
+    }
+  }
+}
+
+function contentMatchConfidence(left, right) {
+  const a = normalizeTitle(left.title).slice(0, 500);
+  const b = normalizeTitle(right.title).slice(0, 500);
+  if (isGenericTitle(a) || isGenericTitle(b)) return 0;
+  const aEpisode = episodeMarker(a);
+  const bEpisode = episodeMarker(b);
+  if (aEpisode && bEpisode && aEpisode !== bEpisode) return 0;
+  const age = Math.abs(Date.parse(left.publishedAt) - Date.parse(right.publishedAt));
+  if (!Number.isFinite(age) || age > 30 * 24 * 60 * 60 * 1000) return 0;
+  if (a === b) return 1;
+  if (Math.min(a.length, b.length) >= 8 && (a.includes(b) || b.includes(a))) return .99;
+  if (age > 6 * 60 * 60 * 1000) return 0;
+  const overlap = ngramOverlap(a, b);
+  return overlap >= .3 ? overlap : 0;
+}
+
+function ngramOverlap(left, right) {
+  const grams = value => new Set(Array.from({ length: Math.max(0, value.length - 1) }, (_, index) => value.slice(index, index + 2)));
+  const a = grams(left);
+  const b = grams(right);
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const gram of a) if (b.has(gram)) shared += 1;
+  return shared / Math.min(a.size, b.size);
+}
+
+function episodeMarker(title) {
+  const match = title.match(/(?:第)?([一二三四五六七八九十百零〇两\d]+)期/);
+  return match?.[1] ?? null;
+}
+
+function preferredTitle(titles, fallback) {
+  return titles.map(title => String(title ?? '').trim())
+    .filter(title => title && !isGenericTitle(normalizeTitle(title)))
+    .sort((left, right) => titlePenalty(left) - titlePenalty(right))[0] ?? fallback;
+}
+
+function titlePenalty(title) {
+  return title.length + (title.includes('\n') ? 200 : 0) + (title.length > 80 ? 200 : 0);
+}
+
+function isGenericTitle(title) {
+  return ['', '未命名作品', '无标题', '未命名内容'].includes(title);
 }
 
 export function saveCollection(db, result, capturedAt) {
