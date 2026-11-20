@@ -228,12 +228,61 @@ export function getContents(db, filters = {}) {
     parameters.push(filters.platform);
   }
 
-  return db.prepare(`
+  const contents = db.prepare(`
     SELECT c.*
     FROM contents c
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY c.published_at DESC, c.id DESC
   `).all(...parameters);
+
+  const postsStatement = db.prepare(`
+    SELECT
+      p.platform, p.post_id, p.title, p.url, p.cover_url, p.published_at,
+      m.captured_at, m.views, m.likes, m.comments, m.favorites, m.shares
+    FROM platform_posts p
+    LEFT JOIN metric_snapshots m
+      ON m.platform = p.platform
+      AND m.post_id = p.post_id
+      AND m.snapshot_date = (
+        SELECT MAX(latest.snapshot_date)
+        FROM metric_snapshots latest
+        WHERE latest.platform = p.platform AND latest.post_id = p.post_id
+      )
+    WHERE p.content_id = ?
+    ORDER BY p.platform
+  `);
+
+  return contents.map(content => {
+    const posts = postsStatement.all(content.id).map(post => {
+      const views = post.views == null ? null : Number(post.views);
+      const interactions = [post.likes, post.comments, post.favorites, post.shares]
+        .reduce((sum, value) => sum + (value == null ? 0 : Number(value)), 0);
+      return {
+        platform: post.platform,
+        postId: post.post_id,
+        title: post.title,
+        url: post.url,
+        coverUrl: post.cover_url,
+        publishedAt: post.published_at,
+        metrics: {
+          capturedAt: post.captured_at,
+          views,
+          likes: post.likes,
+          comments: post.comments,
+          favorites: post.favorites,
+          shares: post.shares,
+          interactionRate: views > 0 ? interactions / views : null
+        }
+      };
+    });
+    return {
+      id: content.id,
+      title: content.title,
+      coverPath: content.cover_path ?? (posts[0] ? `/covers/${posts[0].platform}/${posts[0].postId}` : null),
+      publishedAt: content.published_at,
+      posts
+    };
+  });
 }
 
 export function getOverview(db, now = new Date()) {
