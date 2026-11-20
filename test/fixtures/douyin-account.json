@@ -1,0 +1,24 @@
+{
+  "userInfo": {
+    "status_code": 0,
+    "user": {
+      "uid": "dy-account-001",
+      "nickname": "示例创作者",
+      "avatar_thumb": {
+        "uri": "avatar-001",
+        "url_list": ["https://example.test/douyin/avatar.jpg"]
+      },
+      "follower_count": 128,
+      "following_count": 18,
+      "total_favorited": 2400
+    }
+  },
+  "overview": {
+    "status_code": 0,
+    "data": {
+      "fans": 128,
+      "new_fans": 4,
+      "play": 2200
+    }
+  }
+}

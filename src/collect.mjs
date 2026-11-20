@@ -1,4 +1,7 @@
 import { saveCollection } from './db.mjs';
+import { douyinCollector } from './platforms/douyin.mjs';
+
+export const defaultCollectors = [douyinCollector];
 
 export async function collectAll({
   db,

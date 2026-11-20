@@ -1,0 +1,68 @@
+{
+  "status_code": 0,
+  "total": 3,
+  "has_more": true,
+  "max_cursor": "cursor-2",
+  "items": [
+    {
+      "id": "dy-001",
+      "description": "AI 产品经理快速入门",
+      "create_time": 1794988800,
+      "cover": {
+        "uri": "cover-001",
+        "url_list": ["https://example.test/douyin/cover-001.jpg"]
+      },
+      "metrics": {
+        "view_count": 1200,
+        "like_count": 80,
+        "comment_count": 12,
+        "favorite_count": 35,
+        "share_count": 9
+      }
+    },
+    {
+      "id": "dy-002",
+      "description": "第二条作品",
+      "create_time": 1794902400,
+      "cover": {
+        "uri": "cover-002",
+        "url_list": ["https://example.test/douyin/cover-002.jpg"]
+      },
+      "metrics": {
+        "view_count": 400,
+        "like_count": 20,
+        "comment_count": 3
+      }
+    }
+  ],
+  "aweme_list": [
+    {
+      "item_id": "dy-001",
+      "aweme_id": "dy-001",
+      "item_title": "AI 产品经理快速入门",
+      "create_time": 1794988800,
+      "duration": 42000,
+      "statistics": {
+        "aweme_id": "dy-001",
+        "play_count": 1200,
+        "digg_count": 80,
+        "comment_count": 12,
+        "collect_count": 35,
+        "share_count": 9
+      }
+    },
+    {
+      "item_id": "dy-002",
+      "aweme_id": "dy-002",
+      "item_title": "第二条作品",
+      "create_time": 1794902400,
+      "duration": 30000,
+      "statistics": {
+        "aweme_id": "dy-002",
+        "play_count": 400,
+        "digg_count": 20,
+        "comment_count": 3
+      }
+    }
+  ]
+}
