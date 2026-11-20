@@ -1,0 +1,30 @@
+{
+  "userInfo": {
+    "code": 0,
+    "success": true,
+    "data": {
+      "userId": "xhs-account-001",
+      "redId": "example-red-id",
+      "userName": "示例创作者",
+      "userAvatar": "https://example.test/xhs/avatar.jpg"
+    }
+  },
+  "fans": {
+    "code": 0,
+    "success": true,
+    "data": {
+      "thirty": {
+        "fans_count": 50,
+        "fans_list": [
+          { "date": "2026-11-20", "count": 50 }
+        ],
+        "rise_fans_count": 2,
+        "rise_fans_list": [
+          { "date": "2026-11-20", "count": 2 }
+        ],
+        "leave_fans_count": 0,
+        "leave_fans_list": []
+      }
+    }
+  }
+}

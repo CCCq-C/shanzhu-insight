@@ -1,0 +1,36 @@
+{
+  "code": 0,
+  "success": true,
+  "msg": "成功",
+  "data": {
+    "page": 2,
+    "notes": [
+      {
+        "id": "xhs-001",
+        "display_title": "AI 产品经理快速入门",
+        "visible_time": 1794988800,
+        "time": "2026-11-18 16:00",
+        "images_list": [
+          { "url": "https://example.test/xhs/cover-001.jpg" }
+        ],
+        "view_count": 900,
+        "likes": 60,
+        "comments_count": 8,
+        "collected_count": 22,
+        "shared_count": 6
+      },
+      {
+        "id": "xhs-002",
+        "display_title": "第二篇笔记",
+        "visible_time": 1794902400,
+        "time": "2026-11-17 16:00",
+        "images_list": [
+          { "url": "https://example.test/xhs/cover-002.jpg" }
+        ],
+        "view_count": 300,
+        "likes": 18,
+        "comments_count": 2
+      }
+    ]
+  }
+}
