@@ -90,7 +90,25 @@ export function initSchema(db) {
       schema_version INTEGER NOT NULL DEFAULT 1
     );
   `);
+  ensureMetricColumns(db);
   reconcileContentGroups(db);
+}
+
+function ensureMetricColumns(db) {
+  const existing = new Set(db.prepare('PRAGMA table_info(metric_snapshots)').all().map(row => row.name));
+  const columns = {
+    duration_seconds: 'REAL',
+    average_watch_seconds: 'REAL',
+    completion_rate: 'REAL',
+    five_second_completion_rate: 'REAL',
+    two_second_bounce_rate: 'REAL',
+    impressions: 'INTEGER',
+    cover_click_rate: 'REAL',
+    followers_gained: 'INTEGER'
+  };
+  for (const [name, type] of Object.entries(columns)) {
+    if (!existing.has(name)) db.exec(`ALTER TABLE metric_snapshots ADD COLUMN ${name} ${type}`);
+  }
 }
 
 export function pairContent(db, post, platform = null) {
@@ -253,6 +271,18 @@ export function saveCollection(db, result, capturedAt) {
       result.account.avatarUrl ?? null
     );
 
+    const saveHistoricalAccount = db.prepare(`
+      INSERT INTO account_snapshots (
+        platform, snapshot_date, captured_at, followers, following, likes_received
+      ) VALUES (?, ?, ?, ?, NULL, NULL)
+      ON CONFLICT(platform, snapshot_date) DO UPDATE SET
+        followers = COALESCE(account_snapshots.followers, excluded.followers)
+    `);
+    for (const point of result.accountHistory ?? []) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(point.date)) || point.followers == null) continue;
+      saveHistoricalAccount.run(result.platform, point.date, capturedIso, nullableInteger(point.followers));
+    }
+
     db.prepare(`
       INSERT INTO account_snapshots (
         platform, snapshot_date, captured_at, followers, following, likes_received
@@ -274,9 +304,12 @@ export function saveCollection(db, result, capturedAt) {
     const metricByPost = new Map(result.metrics.map(metric => [String(metric.postId), metric]));
     for (const post of result.posts) {
       const postId = String(post.postId);
-      const saved = db.prepare(`
+      let saved = db.prepare(`
         SELECT content_id FROM platform_posts WHERE platform = ? AND post_id = ?
       `).get(result.platform, postId);
+      if (!saved && result.platform === 'douyin') {
+        saved = migrateRoundedDouyinId(db, post, postId);
+      }
       const contentId = saved?.content_id ?? pairContent(db, post, result.platform);
 
       db.prepare(`
@@ -303,15 +336,26 @@ export function saveCollection(db, result, capturedAt) {
       db.prepare(`
         INSERT INTO metric_snapshots (
           platform, post_id, snapshot_date, captured_at,
-          views, likes, comments, favorites, shares
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          views, likes, comments, favorites, shares,
+          duration_seconds, average_watch_seconds, completion_rate,
+          five_second_completion_rate, two_second_bounce_rate,
+          impressions, cover_click_rate, followers_gained
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(platform, post_id, snapshot_date) DO UPDATE SET
           captured_at = excluded.captured_at,
           views = COALESCE(excluded.views, metric_snapshots.views),
           likes = COALESCE(excluded.likes, metric_snapshots.likes),
           comments = COALESCE(excluded.comments, metric_snapshots.comments),
           favorites = COALESCE(excluded.favorites, metric_snapshots.favorites),
-          shares = COALESCE(excluded.shares, metric_snapshots.shares)
+          shares = COALESCE(excluded.shares, metric_snapshots.shares),
+          duration_seconds = COALESCE(excluded.duration_seconds, metric_snapshots.duration_seconds),
+          average_watch_seconds = COALESCE(excluded.average_watch_seconds, metric_snapshots.average_watch_seconds),
+          completion_rate = COALESCE(excluded.completion_rate, metric_snapshots.completion_rate),
+          five_second_completion_rate = COALESCE(excluded.five_second_completion_rate, metric_snapshots.five_second_completion_rate),
+          two_second_bounce_rate = COALESCE(excluded.two_second_bounce_rate, metric_snapshots.two_second_bounce_rate),
+          impressions = COALESCE(excluded.impressions, metric_snapshots.impressions),
+          cover_click_rate = COALESCE(excluded.cover_click_rate, metric_snapshots.cover_click_rate),
+          followers_gained = COALESCE(excluded.followers_gained, metric_snapshots.followers_gained)
       `).run(
         result.platform,
         postId,
@@ -321,7 +365,15 @@ export function saveCollection(db, result, capturedAt) {
         nullableInteger(metric.likes),
         nullableInteger(metric.comments),
         nullableInteger(metric.favorites),
-        nullableInteger(metric.shares)
+        nullableInteger(metric.shares),
+        nullableNumber(metric.durationSeconds),
+        nullableNumber(metric.averageWatchSeconds),
+        nullableNumber(metric.completionRate),
+        nullableNumber(metric.fiveSecondCompletionRate),
+        nullableNumber(metric.twoSecondBounceRate),
+        nullableInteger(metric.impressions),
+        nullableNumber(metric.coverClickRate),
+        nullableInteger(metric.followersGained)
       );
     }
 
@@ -332,9 +384,38 @@ export function saveCollection(db, result, capturedAt) {
   }
 }
 
+function migrateRoundedDouyinId(db, post, exactId) {
+  const publishedAt = new Date(post.publishedAt).toISOString();
+  const previous = db.prepare(`
+    SELECT * FROM platform_posts
+    WHERE platform = 'douyin' AND title = ? AND published_at = ? AND post_id <> ?
+    ORDER BY post_id LIMIT 1
+  `).get(post.title, publishedAt, exactId);
+  if (!previous || !likelyRoundedId(previous.post_id, exactId)) return null;
+  db.prepare(`
+    INSERT INTO platform_posts (platform, post_id, content_id, title, url, cover_url, published_at)
+    VALUES ('douyin', ?, ?, ?, ?, ?, ?)
+  `).run(exactId, previous.content_id, post.title, post.url ?? null, post.coverUrl ?? null, publishedAt);
+  db.prepare(`
+    UPDATE metric_snapshots SET post_id = ? WHERE platform = 'douyin' AND post_id = ?
+  `).run(exactId, previous.post_id);
+  db.prepare(`DELETE FROM platform_posts WHERE platform = 'douyin' AND post_id = ?`).run(previous.post_id);
+  return { content_id: previous.content_id };
+}
+
+function likelyRoundedId(previousId, exactId) {
+  if (!/^\d{16,}$/.test(previousId) || !/^\d{16,}$/.test(exactId)) return false;
+  const difference = BigInt(previousId) - BigInt(exactId);
+  return difference !== 0n && (difference < 0n ? -difference : difference) <= 1024n;
+}
+
 export function getContents(db, filters = {}) {
   const where = [];
   const parameters = [];
+  if (filters.id != null) {
+    where.push('c.id = ?');
+    parameters.push(Number(filters.id));
+  }
   if (filters.from) {
     where.push('c.published_at >= ?');
     parameters.push(new Date(filters.from).toISOString());
@@ -358,7 +439,10 @@ export function getContents(db, filters = {}) {
   const postsStatement = db.prepare(`
     SELECT
       p.platform, p.post_id, p.title, p.url, p.cover_url, p.published_at,
-      m.captured_at, m.views, m.likes, m.comments, m.favorites, m.shares
+      m.captured_at, m.views, m.likes, m.comments, m.favorites, m.shares,
+      m.duration_seconds, m.average_watch_seconds, m.completion_rate,
+      m.five_second_completion_rate, m.two_second_bounce_rate,
+      m.impressions, m.cover_click_rate, m.followers_gained
     FROM platform_posts p
     LEFT JOIN metric_snapshots m
       ON m.platform = p.platform
@@ -373,28 +457,15 @@ export function getContents(db, filters = {}) {
   `);
 
   return contents.map(content => {
-    const posts = postsStatement.all(content.id).map(post => {
-      const views = post.views == null ? null : Number(post.views);
-      const interactions = [post.likes, post.comments, post.favorites, post.shares]
-        .reduce((sum, value) => sum + (value == null ? 0 : Number(value)), 0);
-      return {
+    const posts = postsStatement.all(content.id).map(post => ({
         platform: post.platform,
         postId: post.post_id,
         title: post.title,
         url: post.url,
         coverUrl: post.cover_url,
         publishedAt: post.published_at,
-        metrics: {
-          capturedAt: post.captured_at,
-          views,
-          likes: post.likes,
-          comments: post.comments,
-          favorites: post.favorites,
-          shares: post.shares,
-          interactionRate: views > 0 ? interactions / views : null
-        }
-      };
-    });
+        metrics: presentMetrics(post)
+      }));
     return {
       id: content.id,
       title: content.title,
@@ -403,6 +474,66 @@ export function getContents(db, filters = {}) {
       posts
     };
   });
+}
+
+export function getContentDetail(db, contentId) {
+  const id = Number(contentId);
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  const content = getContents(db, { id })[0];
+  if (!content) return null;
+  const historyStatement = db.prepare(`
+    SELECT snapshot_date AS date, captured_at, views, likes, comments, favorites, shares,
+      duration_seconds, average_watch_seconds, completion_rate,
+      five_second_completion_rate, two_second_bounce_rate,
+      impressions, cover_click_rate, followers_gained
+    FROM metric_snapshots
+    WHERE platform = ? AND post_id = ?
+    ORDER BY snapshot_date
+  `);
+  return {
+    ...content,
+    posts: content.posts.map(post => ({
+      ...post,
+      history: historyStatement.all(post.platform, post.postId).map(row => ({
+        date: row.date,
+        ...presentMetrics(row)
+      }))
+    }))
+  };
+}
+
+function presentMetrics(row) {
+  const views = numberOrNull(row.views);
+  const likes = numberOrNull(row.likes);
+  const comments = numberOrNull(row.comments);
+  const favorites = numberOrNull(row.favorites);
+  const shares = numberOrNull(row.shares);
+  const durationSeconds = numberOrNull(row.duration_seconds);
+  const averageWatchSeconds = numberOrNull(row.average_watch_seconds);
+  const followersGained = numberOrNull(row.followers_gained);
+  const interactions = [likes, comments, favorites, shares]
+    .reduce((sum, value) => sum + (value ?? 0), 0);
+  return {
+    capturedAt: row.captured_at,
+    views,
+    likes,
+    comments,
+    favorites,
+    shares,
+    durationSeconds,
+    averageWatchSeconds,
+    completionRate: numberOrNull(row.completion_rate),
+    fiveSecondCompletionRate: numberOrNull(row.five_second_completion_rate),
+    twoSecondBounceRate: numberOrNull(row.two_second_bounce_rate),
+    impressions: numberOrNull(row.impressions),
+    coverClickRate: numberOrNull(row.cover_click_rate),
+    followersGained,
+    averageWatchProgress: durationSeconds > 0 && averageWatchSeconds != null
+      ? averageWatchSeconds / durationSeconds
+      : null,
+    interactionRate: views > 0 ? interactions / views : null,
+    followerConversionRate: views > 0 && followersGained != null ? followersGained / views : null
+  };
 }
 
 export function getOverview(db, now = new Date()) {
@@ -473,6 +604,16 @@ export function getOverview(db, now = new Date()) {
 
 function nullableInteger(value) {
   return value == null ? null : Math.trunc(Number(value));
+}
+
+function nullableNumber(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function numberOrNull(value) {
+  return value == null ? null : Number(value);
 }
 
 function formatDate(date) {

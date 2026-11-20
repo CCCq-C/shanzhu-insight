@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
+import * as dbModule from '../src/db.mjs';
+
+const {
   getContents,
   getOverview,
   initSchema,
   openDatabase,
   pairContent,
   saveCollection
-} from '../src/db.mjs';
+} = dbModule;
 
 function createDatabase() {
   const db = openDatabase(':memory:');
@@ -66,6 +68,131 @@ test('initSchema creates exactly the six business tables', () => {
     'contents',
     'metric_snapshots',
     'platform_posts'
+  ]);
+});
+
+test('initSchema adds deep metric columns to an existing database', () => {
+  const db = openDatabase(':memory:');
+  db.exec(`
+    CREATE TABLE metric_snapshots (
+      platform TEXT NOT NULL,
+      post_id TEXT NOT NULL,
+      snapshot_date TEXT NOT NULL,
+      captured_at TEXT NOT NULL,
+      views INTEGER,
+      likes INTEGER,
+      comments INTEGER,
+      favorites INTEGER,
+      shares INTEGER,
+      PRIMARY KEY (platform, post_id, snapshot_date)
+    )
+  `);
+
+  initSchema(db);
+
+  const columns = db.prepare('PRAGMA table_info(metric_snapshots)').all().map(row => row.name);
+  for (const name of [
+    'duration_seconds', 'average_watch_seconds', 'completion_rate',
+    'five_second_completion_rate', 'two_second_bounce_rate', 'impressions',
+    'cover_click_rate', 'followers_gained'
+  ]) assert.equal(columns.includes(name), true, name);
+});
+
+test('saveCollection backfills real follower history before the current snapshot', () => {
+  const db = createDatabase();
+  saveCollection(db, result({
+    accountHistory: [
+      { date: '2026-11-19', followers: 92 },
+      { date: '2026-11-20', followers: 98 }
+    ]
+  }), new Date('2026-11-20T10:00:00+08:00'));
+
+  assert.deepEqual(db.prepare(`
+    SELECT snapshot_date AS date, followers FROM account_snapshots ORDER BY snapshot_date
+  `).all().map(row => ({ ...row })), [
+    { date: '2026-11-19', followers: 92 },
+    { date: '2026-11-20', followers: 100 }
+  ]);
+});
+
+test('saveCollection preserves known deep metrics when a later response omits them', () => {
+  const db = createDatabase();
+  const deep = {
+    postId: 'post-1', views: 1000, likes: 50, comments: 4, favorites: 8, shares: 2,
+    durationSeconds: 100, averageWatchSeconds: 35.5, completionRate: .24,
+    fiveSecondCompletionRate: .61, twoSecondBounceRate: .18, impressions: 2500,
+    coverClickRate: .12, followersGained: 9
+  };
+  saveCollection(db, result({ metrics: [deep] }), new Date('2026-11-20T10:00:00+08:00'));
+  saveCollection(db, result({ metrics: [{
+    postId: 'post-1', views: 1100, likes: null, comments: null, favorites: null, shares: null,
+    durationSeconds: null, averageWatchSeconds: null, completionRate: null,
+    fiveSecondCompletionRate: null, twoSecondBounceRate: null, impressions: null,
+    coverClickRate: null, followersGained: null
+  }] }), new Date('2026-11-20T11:00:00+08:00'));
+
+  const row = db.prepare(`
+    SELECT duration_seconds, average_watch_seconds, completion_rate,
+      five_second_completion_rate, two_second_bounce_rate, impressions,
+      cover_click_rate, followers_gained
+    FROM metric_snapshots
+  `).get();
+  assert.deepEqual({ ...row }, {
+    duration_seconds: 100,
+    average_watch_seconds: 35.5,
+    completion_rate: .24,
+    five_second_completion_rate: .61,
+    two_second_bounce_rate: .18,
+    impressions: 2500,
+    cover_click_rate: .12,
+    followers_gained: 9
+  });
+});
+
+test('saveCollection migrates a rounded Douyin ID without duplicating content', () => {
+  const db = createDatabase();
+  const rounded = result({
+    posts: [{ ...result().posts[0], postId: '7710071844748987000' }],
+    metrics: [{ ...result().metrics[0], postId: '7710071844748987000' }]
+  });
+  const exact = result({
+    posts: [{ ...result().posts[0], postId: '7710071844748987658' }],
+    metrics: [{ ...result().metrics[0], postId: '7710071844748987658', views: 1200 }]
+  });
+  saveCollection(db, rounded, new Date('2026-11-19T10:00:00+08:00'));
+  saveCollection(db, exact, new Date('2026-11-20T10:00:00+08:00'));
+
+  assert.deepEqual(db.prepare('SELECT post_id FROM platform_posts').all().map(row => row.post_id), [
+    '7710071844748987658'
+  ]);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM contents').get().count, 1);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM metric_snapshots WHERE post_id = '7710071844748987658'
+  `).get().count, 2);
+});
+
+test('getContentDetail returns current comparison metrics and daily history', () => {
+  assert.equal(typeof dbModule.getContentDetail, 'function');
+  const db = createDatabase();
+  const metrics = date => [{
+    postId: 'post-1', views: date === 19 ? 800 : 1000, likes: 50, comments: 4,
+    favorites: 8, shares: 2, durationSeconds: 100, averageWatchSeconds: date === 19 ? 30 : 35,
+    completionRate: .24, fiveSecondCompletionRate: .61, twoSecondBounceRate: .18,
+    impressions: 2500, coverClickRate: .12, followersGained: 9
+  }];
+  saveCollection(db, result({ metrics: metrics(19) }), new Date('2026-11-19T10:00:00+08:00'));
+  saveCollection(db, result({ metrics: metrics(20) }), new Date('2026-11-20T10:00:00+08:00'));
+
+  const detail = dbModule.getContentDetail(db, 1);
+  assert.equal(detail.posts[0].metrics.averageWatchProgress, .35);
+  assert.equal(detail.posts[0].metrics.followerConversionRate, .009);
+  assert.deepEqual(detail.posts[0].history.map(point => ({
+    date: point.date,
+    averageWatchProgress: point.averageWatchProgress,
+    interactionRate: point.interactionRate
+  })), [
+    { date: '2026-11-19', averageWatchProgress: .3, interactionRate: .08 },
+    { date: '2026-11-20', averageWatchProgress: .35, interactionRate: .064 }
   ]);
 });
 
