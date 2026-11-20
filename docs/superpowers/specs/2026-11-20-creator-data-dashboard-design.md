@@ -191,6 +191,9 @@ node src/cli.mjs serve
 - 作品：作品管理页面响应。
 - 优先读取后台返回的 JSON；Shadow DOM 只用于发现登录状态和最后兜底。
 - 匹配：作品 ID 优先；拿不到 ID 时用标题首行与发布时间。
+- 现成项目已验证三个统计动作：`new_post_total_data` 取汇总、`fans_trend` 取粉丝、`post_list` 分页取作品。
+- `post_list` 支持 `currentPage`、`pageSize`、开始时间和结束时间，并返回 `totalCount`。实现时按总数停止分页，并保留 100 条第一版上限。
+- 视频号请求必须在已登录的同源浏览器页面执行。账号标识从页面现有状态读取，不保存为远程凭据。
 
 ### 插件触发条件
 
