@@ -80,13 +80,16 @@ export async function collectChannels({ context, since, limit = 100, now = new D
   const page = await context.newPage();
   const warnings = [];
   try {
-    const postResponsePromise = page.waitForResponse(
-      response => response.url().includes(POST_LIST_MARKER),
-      { timeout: 30000 }
-    );
-    await page.goto(POSTS_URL, { waitUntil: 'domcontentloaded' });
-    await page.getByText('单篇视频', { exact: true }).click();
-    const postResponse = await postResponsePromise;
+    const [postResponse] = await Promise.all([
+      page.waitForResponse(
+        response => response.url().includes(POST_LIST_MARKER),
+        { timeout: 30000 }
+      ),
+      (async () => {
+        await page.goto(POSTS_URL, { waitUntil: 'domcontentloaded' });
+        await page.getByText('单篇视频', { exact: true }).click();
+      })()
+    ]);
     const identity = await readIdentity(page);
     const initialBody = postResponse.request().postDataJSON();
     const requestBody = {
@@ -120,12 +123,13 @@ export async function collectChannels({ context, since, limit = 100, now = new D
       nextPage = parsed.nextPage;
     }
 
-    const fansResponsePromise = page.waitForResponse(
-      response => response.url().includes(FANS_TREND_MARKER),
-      { timeout: 30000 }
-    );
-    await page.goto(FANS_URL, { waitUntil: 'domcontentloaded' });
-    const fansResponse = await fansResponsePromise;
+    const [fansResponse] = await Promise.all([
+      page.waitForResponse(
+        response => response.url().includes(FANS_TREND_MARKER),
+        { timeout: 30000 }
+      ),
+      page.goto(FANS_URL, { waitUntil: 'domcontentloaded' })
+    ]);
     const account = parseChannelsFans([await fansResponse.json(), identity]);
     const sinceTime = since ? new Date(since).getTime() : Number.NEGATIVE_INFINITY;
     const posts = [...allPosts.values()]

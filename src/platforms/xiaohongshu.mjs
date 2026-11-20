@@ -100,7 +100,13 @@ export async function collectXiaohongshu({ context, since, limit = 100 }) {
     while (hasMore && allPosts.size < limit) {
       const nextUrl = new URL(firstResponse.url());
       nextUrl.searchParams.set('page', String(nextPage));
-      const payload = await fetchJson(page, nextUrl.href);
+      let payload;
+      try {
+        payload = await fetchJson(page, nextUrl.href);
+      } catch {
+        warnings.push('笔记后续分页请求被平台拒绝');
+        break;
+      }
       const next = parseXiaohongshuPosted(payload);
       addPage(next, allPosts, allMetrics, limit);
       reportedTotal = Math.max(reportedTotal, next.reportedTotal, allPosts.size);

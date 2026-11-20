@@ -133,6 +133,23 @@ test('collectChannels stops at 100 items and reports partial data', async () => 
   assert.equal(postBodies[0].currentPage, 1);
 });
 
+test('collectChannels consumes the pending response wait when tab activation fails', async () => {
+  let rejectResponse;
+  const response = new Promise((_, reject) => { rejectResponse = reject; });
+  const page = {
+    waitForResponse: () => response,
+    goto: async () => {},
+    getByText: () => ({ click: async () => { throw new Error('tab activation failed'); } }),
+    close: async () => { rejectResponse(new Error('response wait stopped')); }
+  };
+
+  await assert.rejects(
+    collectChannels({ context: { newPage: async () => page }, since: new Date(), now: new Date() }),
+    /tab activation failed/
+  );
+  await new Promise(resolve => setImmediate(resolve));
+});
+
 test('channelsCollector detects login UI inside the Wujie shadow root', async () => {
   const page = {
     goto: async () => {},

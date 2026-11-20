@@ -120,6 +120,21 @@ test('collectXiaohongshu stops at 100 items and marks remaining pages partial', 
   assert.equal(requestedUrls.filter(url => url.includes('/note/user/posted')).length, 0);
 });
 
+test('collectXiaohongshu keeps the first page when protected pagination is rejected', async () => {
+  const { context } = fakeContext({ paginationError: new Error('HTTP 406') });
+
+  const result = await collectXiaohongshu({
+    context,
+    since: new Date('2026-11-01T00:00:00.000Z'),
+    limit: 20,
+    now: new Date('2026-11-20T00:00:00.000Z')
+  });
+
+  assert.equal(result.posts.length, postedFixture.data.notes.length);
+  assert.equal(result.partial, true);
+  assert.deepEqual(result.warnings, ['笔记后续分页请求被平台拒绝']);
+});
+
 test('xiaohongshuCollector reports login redirects', async () => {
   const page = {
     goto: async () => {},
@@ -132,7 +147,7 @@ test('xiaohongshuCollector reports login redirects', async () => {
   }), { ok: false, reason: 'Login required' });
 });
 
-function fakeContext({ firstPage = postedFixture, secondPage } = {}) {
+function fakeContext({ firstPage = postedFixture, secondPage, paginationError } = {}) {
   const requestedUrls = [];
   const firstUrl = 'https://creator.xiaohongshu.com/api/galaxy/v2/creator/note/user/posted?tab=0&page=0';
   const response = {
@@ -149,6 +164,7 @@ function fakeContext({ firstPage = postedFixture, secondPage } = {}) {
       requestedUrls.push(url);
       if (url.includes('/api/galaxy/user/info')) return structuredClone(fansFixture.userInfo);
       if (url.includes('/fans/overall_new')) return structuredClone(fansFixture.fans);
+      if (url.includes('/note/user/posted') && paginationError) throw paginationError;
       if (url.includes('/note/user/posted') && secondPage) return structuredClone(secondPage);
       throw new Error(`Unexpected URL: ${url}`);
     },
