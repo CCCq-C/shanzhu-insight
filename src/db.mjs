@@ -92,17 +92,21 @@ export function initSchema(db) {
   `);
 }
 
-export function pairContent(db, post) {
+export function pairContent(db, post, platform = null) {
   const normalizedTitle = normalizeTitle(post.title);
   const publishedAt = new Date(post.publishedAt).toISOString();
-  const existing = db.prepare(`
+  const genericTitle = ['', '未命名作品', '无标题', '未命名内容'].includes(normalizedTitle);
+  const existing = genericTitle ? null : db.prepare(`
     SELECT id
     FROM contents
     WHERE normalized_title = ?
       AND ABS(julianday(published_at) - julianday(?)) <= 3
+      AND (? IS NULL OR NOT EXISTS (
+        SELECT 1 FROM platform_posts p WHERE p.content_id = contents.id AND p.platform = ?
+      ))
     ORDER BY ABS(julianday(published_at) - julianday(?)), id
     LIMIT 1
-  `).get(normalizedTitle, publishedAt, publishedAt);
+  `).get(normalizedTitle, publishedAt, platform, platform, publishedAt);
 
   if (existing) return existing.id;
 
@@ -139,9 +143,9 @@ export function saveCollection(db, result, capturedAt) {
       ) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(platform, snapshot_date) DO UPDATE SET
         captured_at = excluded.captured_at,
-        followers = excluded.followers,
-        following = excluded.following,
-        likes_received = excluded.likes_received
+        followers = COALESCE(excluded.followers, account_snapshots.followers),
+        following = COALESCE(excluded.following, account_snapshots.following),
+        likes_received = COALESCE(excluded.likes_received, account_snapshots.likes_received)
     `).run(
       result.platform,
       snapshotDate,
@@ -157,7 +161,7 @@ export function saveCollection(db, result, capturedAt) {
       const saved = db.prepare(`
         SELECT content_id FROM platform_posts WHERE platform = ? AND post_id = ?
       `).get(result.platform, postId);
-      const contentId = saved?.content_id ?? pairContent(db, post);
+      const contentId = saved?.content_id ?? pairContent(db, post, result.platform);
 
       db.prepare(`
         INSERT INTO platform_posts (
@@ -187,11 +191,11 @@ export function saveCollection(db, result, capturedAt) {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(platform, post_id, snapshot_date) DO UPDATE SET
           captured_at = excluded.captured_at,
-          views = excluded.views,
-          likes = excluded.likes,
-          comments = excluded.comments,
-          favorites = excluded.favorites,
-          shares = excluded.shares
+          views = COALESCE(excluded.views, metric_snapshots.views),
+          likes = COALESCE(excluded.likes, metric_snapshots.likes),
+          comments = COALESCE(excluded.comments, metric_snapshots.comments),
+          favorites = COALESCE(excluded.favorites, metric_snapshots.favorites),
+          shares = COALESCE(excluded.shares, metric_snapshots.shares)
       `).run(
         result.platform,
         postId,

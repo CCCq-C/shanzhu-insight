@@ -18,7 +18,7 @@ test('cover store caches a valid image by platform and post identity', async t =
   });
   t.after(() => source.close());
   const cacheDir = tempDirectory(t);
-  const store = createCoverStore({ cacheDir });
+  const store = createCoverStore({ cacheDir, urlAllowed: async () => true });
   const url = `http://127.0.0.1:${source.address().port}/cover.png`;
 
   const first = await store.getCover({ platform: 'douyin', postId: 'post-1', url });
@@ -39,7 +39,7 @@ test('cover store returns a placeholder on timeout', async t => {
     }, 100);
   });
   t.after(() => source.close());
-  const store = createCoverStore({ cacheDir: tempDirectory(t), timeoutMs: 10 });
+  const store = createCoverStore({ cacheDir: tempDirectory(t), timeoutMs: 10, urlAllowed: async () => true });
 
   const result = await store.getCover({
     platform: 'douyin',
@@ -57,7 +57,7 @@ test('cover store rejects images above the byte limit', async t => {
     response.end(PNG);
   });
   t.after(() => source.close());
-  const store = createCoverStore({ cacheDir: tempDirectory(t), maxBytes: 8 });
+  const store = createCoverStore({ cacheDir: tempDirectory(t), maxBytes: 8, urlAllowed: async () => true });
 
   const result = await store.getCover({
     platform: 'douyin',
@@ -74,7 +74,7 @@ test('cover store rejects non-image responses', async t => {
     response.end('not an image');
   });
   t.after(() => source.close());
-  const store = createCoverStore({ cacheDir: tempDirectory(t) });
+  const store = createCoverStore({ cacheDir: tempDirectory(t), urlAllowed: async () => true });
 
   const result = await store.getCover({
     platform: 'douyin',
@@ -93,6 +93,41 @@ test('cover store rejects invalid schemes and traversal identities', async t => 
 
   assert.equal(invalidScheme.placeholder, true);
   assert.equal(traversal.placeholder, true);
+});
+
+test('cover store rejects loopback targets before fetching', async t => {
+  let requests = 0;
+  const store = createCoverStore({
+    cacheDir: tempDirectory(t),
+    fetchImpl: async () => { requests += 1; throw new Error('must not fetch'); }
+  });
+
+  const result = await store.getCover({ platform: 'douyin', postId: 'post-6', url: 'http://127.0.0.1/private.png' });
+
+  assert.equal(result.placeholder, true);
+  assert.equal(requests, 0);
+});
+
+test('cover store revalidates every redirect target', async t => {
+  const checked = [];
+  let requests = 0;
+  const store = createCoverStore({
+    cacheDir: tempDirectory(t),
+    urlAllowed: async url => {
+      checked.push(url.hostname);
+      return url.hostname === 'public.example';
+    },
+    fetchImpl: async () => {
+      requests += 1;
+      return new Response(null, { status: 302, headers: { Location: 'http://127.0.0.1/private.png' } });
+    }
+  });
+
+  const result = await store.getCover({ platform: 'douyin', postId: 'post-7', url: 'https://public.example/cover.png' });
+
+  assert.equal(result.placeholder, true);
+  assert.deepEqual(checked, ['public.example', '127.0.0.1']);
+  assert.equal(requests, 1);
 });
 
 function tempDirectory(t) {

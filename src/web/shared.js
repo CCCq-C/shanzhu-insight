@@ -31,6 +31,7 @@ export function statusPresentation(record = {}) {
   if (record.status === 'running') return { label: '采集中', tone: 'working' };
   if (record.status === 'partial' || record.partial) return { label: '数据不完整', tone: 'warning' };
   if (record.status === 'success') return { label: '数据正常', tone: 'success' };
+  if (record.status === 'needs_login') return { label: '需要登录', tone: 'danger' };
   if (record.status === 'failed' || record.status === 'error') return { label: '采集失败', tone: 'danger' };
   return { label: '等待采集', tone: 'muted' };
 }

@@ -93,6 +93,21 @@ test('saveCollection preserves unavailable metrics as NULL', () => {
   assert.equal(row.favorites, null);
 });
 
+test('saveCollection does not replace known same-day values with unavailable values', () => {
+  const db = createDatabase();
+  saveCollection(db, result(), new Date('2026-11-20T10:00:00+08:00'));
+  saveCollection(db, result({
+    accountSnapshot: { followers: null, following: null, likesReceived: null },
+    metrics: [{ postId: 'post-1', views: null, likes: null, comments: null, favorites: null, shares: null }]
+  }), new Date('2026-11-20T11:00:00+08:00'));
+
+  assert.equal(db.prepare('SELECT followers FROM account_snapshots').get().followers, 100);
+  assert.deepEqual(
+    { ...db.prepare('SELECT views, likes, comments, shares FROM metric_snapshots').get() },
+    { views: 1000, likes: 50, comments: 4, shares: 2 }
+  );
+});
+
 test('getOverview totals the latest follower snapshot from each platform', () => {
   const db = createDatabase();
   saveCollection(db, result(), new Date('2026-11-20T10:00:00+08:00'));
@@ -140,4 +155,25 @@ test('pairContent keeps matching titles separate outside 72 hours', () => {
 
   assert.notEqual(second, first);
   assert.equal(getContents(db, {}).length, 2);
+});
+
+test('pairContent never groups generic placeholder titles', () => {
+  const db = createDatabase();
+  const post = { title: '无标题', publishedAt: '2026-11-20T08:00:00.000Z' };
+
+  assert.notEqual(pairContent(db, post), pairContent(db, post));
+});
+
+test('saveCollection never pairs two posts from the same platform', () => {
+  const db = createDatabase();
+  const first = result();
+  const second = result({
+    posts: [{ ...first.posts[0], postId: 'post-2', url: 'https://example.test/post-2' }],
+    metrics: [{ ...first.metrics[0], postId: 'post-2' }]
+  });
+
+  saveCollection(db, first, new Date('2026-11-20T10:00:00+08:00'));
+  saveCollection(db, second, new Date('2026-11-20T10:05:00+08:00'));
+
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM contents').get().count, 2);
 });

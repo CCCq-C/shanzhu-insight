@@ -34,12 +34,14 @@ function renderLatest(overview) {
   const content = overview.latestContent;
   if (!content) return;
   const posts = content.posts || [];
-  const totals = posts.reduce((result, post) => {
-    const metrics = post.metrics || {};
-    result.views += metrics.views || 0;
-    result.interactions += (metrics.likes || 0) + (metrics.comments || 0) + (metrics.favorites || 0) + (metrics.shares || 0);
-    return result;
-  }, { views: 0, interactions: 0 });
+  const knownViews = posts.map(post => post.metrics?.views).filter(value => value != null);
+  const knownInteractions = posts.flatMap(post => ['likes', 'comments', 'favorites', 'shares']
+    .map(field => post.metrics?.[field]).filter(value => value != null));
+  const totals = {
+    views: knownViews.length ? knownViews.reduce((sum, value) => sum + value, 0) : null,
+    interactions: knownInteractions.length ? knownInteractions.reduce((sum, value) => sum + value, 0) : null
+  };
+  const rate = totals.views > 0 && totals.interactions != null ? totals.interactions / totals.views : null;
   const title = content.title || '未命名内容';
   document.querySelector('#latest-title').textContent = title;
   document.querySelector('#latest-title').title = title;
@@ -47,12 +49,12 @@ function renderLatest(overview) {
   document.querySelector('#publish-badge').textContent = `${posts.length}/3 平台已获取`;
   document.querySelector('#latest-views').textContent = formatMetric(totals.views);
   document.querySelector('#latest-interactions').textContent = formatMetric(totals.interactions);
-  document.querySelector('#latest-rate').textContent = formatRate(totals.views ? totals.interactions / totals.views : null);
+  document.querySelector('#latest-rate').textContent = formatRate(rate);
   document.querySelector('#latest-platforms').innerHTML = posts.map(post => {
     const platform = PLATFORMS[post.platform] || { name: post.platform, short: '?', color: '#73737B' };
     return `<div class="platform-metric"><span class="platform-icon" style="background:${platform.color}">${platform.short}</span><span>${platform.name}</span><strong>${formatMetric(post.metrics?.views)}</strong></div>`;
   }).join('');
-  document.querySelector('#latest-comparison').textContent = `${posts.length} 个平台合计 ${formatMetric(totals.views)} 次播放，互动率 ${formatRate(totals.views ? totals.interactions / totals.views : null)}。`;
+  document.querySelector('#latest-comparison').textContent = `${posts.length} 个平台合计 ${formatMetric(totals.views)} 次播放，互动率 ${formatRate(rate)}。`;
   if (content.coverPath) {
     const cover = document.querySelector('#latest-cover');
     cover.src = content.coverPath;
@@ -82,10 +84,19 @@ function renderInsights(overview) {
     const top = [...latestPosts].sort((a, b) => (b.metrics?.views || 0) - (a.metrics?.views || 0))[0];
     insights.push({ title: '流量来源', body: `${PLATFORMS[top.platform]?.name || top.platform} 贡献最新内容 ${Math.round((top.metrics?.views || 0) / viewTotal * 100)}% 的播放。` });
   }
-  const rates = latestPosts.filter(post => post.metrics?.interactionRate != null).sort((a, b) => b.metrics.interactionRate - a.metrics.interactionRate);
-  if (rates.length) {
-    const top = rates[0];
-    insights.push({ title: '互动质量', body: `${PLATFORMS[top.platform]?.name || top.platform} 的互动率最高，为 ${formatRate(top.metrics.interactionRate)}。` });
+  const comparisons = latestPosts.map(post => {
+    const history = (overview.recentContents || []).slice(1)
+      .map(content => content.posts.find(candidate => candidate.platform === post.platform)?.metrics?.views)
+      .filter(value => value != null)
+      .sort((a, b) => a - b);
+    const baseline = median(history);
+    return baseline > 0 && post.metrics?.views != null
+      ? { post, change: (post.metrics.views - baseline) / baseline }
+      : null;
+  }).filter(Boolean).sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+  if (comparisons.length) {
+    const { post, change } = comparisons[0];
+    insights.push({ title: '历史对比', body: `${PLATFORMS[post.platform]?.name || post.platform} 最新播放比近期中位数${change >= 0 ? '高' : '低'} ${Math.round(Math.abs(change) * 100)}%。` });
   }
   document.querySelector('#insights-list').innerHTML = insights.length
     ? insights.slice(0, 4).map((insight, index) => `<article class="insight-item" data-index="0${index + 1}"><strong>${escapeHtml(insight.title)}</strong><p>${escapeHtml(insight.body)}</p></article>`).join('')
@@ -111,6 +122,7 @@ function renderPlatforms(overview) {
 
 function renderComparison(overview) {
   const contents = (overview.recentContents || []).slice(0, 8).reverse();
+  const compact = matchMedia('(max-width: 520px)').matches;
   const chart = echarts.init(document.querySelector('#comparison-chart'), null, { renderer: 'svg' });
   chart.setOption({
     animationDuration: 650,
@@ -118,14 +130,14 @@ function renderComparison(overview) {
     tooltip: { trigger: 'axis', borderWidth: 0, backgroundColor: 'rgba(29,29,31,.9)', textStyle: { color: '#fff', fontSize: 11 } },
     legend: { top: 4, right: 0, itemWidth: 9, itemHeight: 9, textStyle: { color: '#777780', fontSize: 10 } },
     grid: { left: 4, right: 4, top: 42, bottom: 8, containLabel: true },
-    xAxis: { type: 'category', data: contents.map(content => truncate(content.title, 9)), axisLine: { lineStyle: { color: '#E4E4E8' } }, axisTick: { show: false }, axisLabel: { color: '#92929A', fontSize: 9, interval: 0 } },
+    xAxis: { type: 'category', data: contents.map(content => content.title), axisLine: { lineStyle: { color: '#E4E4E8' } }, axisTick: { show: false }, axisLabel: { color: '#92929A', fontSize: 9, rotate: compact ? 28 : 0, interval: compact ? 1 : 0, formatter: value => truncate(value, compact ? 5 : 9) } },
     yAxis: { type: 'value', splitLine: { lineStyle: { color: '#EEEEF1' } }, axisLabel: { color: '#9A9AA2', fontSize: 9 }, axisLine: { show: false }, axisTick: { show: false } },
     series: Object.entries(PLATFORMS).map(([key, platform]) => ({
       name: platform.name,
       type: 'bar',
       barMaxWidth: 18,
       itemStyle: { borderRadius: [6, 6, 2, 2] },
-      data: contents.map(content => content.posts.find(post => post.platform === key)?.metrics?.views ?? 0)
+      data: contents.map(content => content.posts.find(post => post.platform === key)?.metrics?.views ?? null)
     }))
   });
   charts.push(chart);
@@ -197,4 +209,10 @@ function showToast(message) {
 function truncate(value, length) {
   const text = String(value || '未命名');
   return text.length > length ? `${text.slice(0, length)}…` : text;
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const middle = Math.floor(values.length / 2);
+  return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
 }

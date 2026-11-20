@@ -66,6 +66,14 @@ test('styles use approved tokens and accessibility fallbacks', () => {
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
 });
 
+test('mobile comparison chart reduces crowded category labels', () => {
+  const source = fs.readFileSync(new URL('app.js', webRoot), 'utf8');
+
+  assert.match(source, /matchMedia\(['"]\(max-width:\s*520px\)['"]\)/);
+  assert.match(source, /rotate:\s*compact\s*\?/);
+  assert.match(source, /interval:\s*compact\s*\?/);
+});
+
 test('shared formatters distinguish missing values, rates, and partial status', async () => {
   const { escapeHtml, formatMetric, formatRate, statusPresentation } = await import('../src/web/shared.js');
 
@@ -73,6 +81,7 @@ test('shared formatters distinguish missing values, rates, and partial status', 
   assert.equal(formatMetric(1200), '1,200');
   assert.equal(formatRate(null), '未知');
   assert.equal(statusPresentation({ status: 'partial' }).label, '数据不完整');
+  assert.equal(statusPresentation({ status: 'needs_login' }).label, '需要登录');
   assert.equal(escapeHtml('<script>'), '&lt;script&gt;');
 });
 

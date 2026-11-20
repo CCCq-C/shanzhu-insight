@@ -1,6 +1,20 @@
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
+
+const blockedAddresses = new net.BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+  ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
+  ['224.0.0.0', 4], ['240.0.0.0', 4]
+]) blockedAddresses.addSubnet(network, prefix, 'ipv4');
+for (const [network, prefix] of [
+  ['::', 128], ['::1', 128], ['::ffff:0:0', 96], ['fc00::', 7],
+  ['fe80::', 10], ['ff00::', 8], ['2001:db8::', 32]
+]) blockedAddresses.addSubnet(network, prefix, 'ipv6');
 
 const PLACEHOLDER = Buffer.from(`
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
@@ -15,7 +29,8 @@ export function createCoverStore({
   cacheDir,
   fetchImpl = fetch,
   timeoutMs = 10000,
-  maxBytes = 10 * 1024 * 1024
+  maxBytes = 10 * 1024 * 1024,
+  urlAllowed = isPublicTarget
 }) {
   fs.mkdirSync(cacheDir, { recursive: true });
 
@@ -39,7 +54,8 @@ export function createCoverStore({
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         let response;
         try {
-          response = await fetchImpl(target, { signal: controller.signal, redirect: 'follow' });
+          response = await fetchApproved(target, { fetchImpl, signal: controller.signal, urlAllowed });
+          if (!response) return placeholder();
           if (!response.ok) return placeholder();
           if (!response.headers.get('content-type')?.toLowerCase().startsWith('image/')) return placeholder();
           const declaredSize = Number(response.headers.get('content-length'));
@@ -59,6 +75,35 @@ export function createCoverStore({
       }
     }
   };
+}
+
+async function fetchApproved(initialUrl, { fetchImpl, signal, urlAllowed }) {
+  let target = initialUrl;
+  for (let redirects = 0; redirects <= 5; redirects += 1) {
+    if (!await urlAllowed(target)) return null;
+    const response = await fetchImpl(target, { signal, redirect: 'manual' });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get('location');
+    if (!location || redirects === 5) return null;
+    await response.body?.cancel();
+    target = new URL(location, target);
+  }
+  return null;
+}
+
+async function isPublicTarget(target) {
+  if (!['http:', 'https:'].includes(target.protocol)) return false;
+  const hostname = target.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return false;
+  const family = net.isIP(hostname);
+  if (family) return isPublicAddress(hostname, family);
+  const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+  return addresses.length > 0 && addresses.every(({ address, family: resolvedFamily }) => isPublicAddress(address, resolvedFamily));
+}
+
+function isPublicAddress(address, family) {
+  const type = Number(family) === 6 ? 'ipv6' : 'ipv4';
+  return !blockedAddresses.check(address, type);
 }
 
 async function readLimited(stream, maxBytes) {

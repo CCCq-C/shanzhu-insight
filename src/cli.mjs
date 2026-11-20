@@ -20,8 +20,20 @@ export async function runCli(argv, {
     return 2;
   }
 
-  await handlers[command]();
-  return 0;
+  const exitCode = await handlers[command]();
+  return Number.isInteger(exitCode) ? exitCode : 0;
+}
+
+export async function diagnoseCollectors({ context, collectors = defaultCollectors }) {
+  const statuses = [];
+  for (const collector of collectors) {
+    try {
+      statuses.push({ platform: collector.platform, ...await collector.checkLogin({ context }) });
+    } catch {
+      statuses.push({ platform: collector.platform, ok: false, reason: 'Check failed' });
+    }
+  }
+  return statuses;
 }
 
 function defaultCommands(write) {
@@ -48,6 +60,7 @@ function defaultCommands(write) {
       try {
         const results = await collectAll({ db, context: browser.context, collectors: defaultCollectors });
         write(JSON.stringify(results, null, 2));
+        return results.some(result => ['success', 'partial'].includes(result.status)) ? 0 : 1;
       } finally {
         await browser.close();
         db.close();
@@ -56,11 +69,9 @@ function defaultCommands(write) {
     doctor: async () => {
       const browser = await openPersistentBrowser();
       try {
-        const statuses = [];
-        for (const collector of defaultCollectors) {
-          statuses.push({ platform: collector.platform, ...await collector.checkLogin({ context: browser.context }) });
-        }
+        const statuses = await diagnoseCollectors({ context: browser.context });
         write(JSON.stringify(statuses, null, 2));
+        return statuses.every(status => status.ok) ? 0 : 1;
       } finally {
         await browser.close();
       }

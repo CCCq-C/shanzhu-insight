@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { runCli } from '../src/cli.mjs';
+import { diagnoseCollectors, runCli } from '../src/cli.mjs';
 import { collectAll } from '../src/collect.mjs';
 import { initSchema, openDatabase, saveCollection } from '../src/db.mjs';
 
@@ -133,4 +133,30 @@ test('runCli dispatches known commands and rejects unknown commands', async () =
   assert.equal(await runCli(['publish'], { commands, write: line => output.push(line) }), 2);
   assert.deepEqual(called, ['login', 'collect', 'doctor', 'serve']);
   assert.match(output.at(-1), /Usage:/);
+});
+
+test('runCli propagates an integer command exit code', async () => {
+  const commands = {
+    login: async () => 0,
+    collect: async () => 1,
+    doctor: async () => 0,
+    serve: async () => 0
+  };
+
+  assert.equal(await runCli(['collect'], { commands }), 1);
+});
+
+test('diagnoseCollectors isolates platform errors and marks login expiry', async () => {
+  const statuses = await diagnoseCollectors({
+    context: {},
+    collectors: [
+      { platform: 'douyin', checkLogin: async () => { throw new Error('secret token'); } },
+      { platform: 'channels', checkLogin: async () => ({ ok: false, reason: 'Login required' }) }
+    ]
+  });
+
+  assert.deepEqual(statuses, [
+    { platform: 'douyin', ok: false, reason: 'Check failed' },
+    { platform: 'channels', ok: false, reason: 'Login required' }
+  ]);
 });
