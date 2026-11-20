@@ -24,7 +24,7 @@
 ## 安装
 
 ```powershell
-git clone <你的仓库地址> shanzhu-insight
+git clone https://github.com/CCCq-C/shanzhu-insight.git
 cd shanzhu-insight
 npm ci
 ```
