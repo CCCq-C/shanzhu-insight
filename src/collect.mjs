@@ -1,8 +1,9 @@
 import { saveCollection } from './db.mjs';
+import { channelsCollector } from './platforms/channels.mjs';
 import { douyinCollector } from './platforms/douyin.mjs';
 import { xiaohongshuCollector } from './platforms/xiaohongshu.mjs';
 
-export const defaultCollectors = [douyinCollector, xiaohongshuCollector];
+export const defaultCollectors = [douyinCollector, xiaohongshuCollector, channelsCollector];
 
 export async function collectAll({
   db,

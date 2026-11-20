@@ -1,0 +1,49 @@
+{
+  "errCode": 0,
+  "errMsg": "",
+  "data": {
+    "list": [
+      {
+        "objectId": "channels-001",
+        "createTime": 1794988800,
+        "readCount": 700,
+        "likeCount": 16,
+        "favCount": 42,
+        "commentCount": 7,
+        "forwardAggregationCount": 5,
+        "desc": {
+          "description": "AI 产品经理快速入门",
+          "shortTitle": [],
+          "media": [
+            {
+              "coverUrl": "https://example.test/channels/cover-001.jpg",
+              "fullCoverUrl": "https://example.test/channels/full-cover-001.jpg",
+              "thumbUrl": "https://example.test/channels/thumb-001.jpg",
+              "videoPlayLen": 41000
+            }
+          ]
+        }
+      },
+      {
+        "objectId": "channels-002",
+        "createTime": 1794902400,
+        "readCount": 240,
+        "favCount": 11,
+        "desc": {
+          "description": "",
+          "shortTitle": [
+            { "shortTitle": "第二条视频号作品" }
+          ],
+          "media": [
+            {
+              "thumbUrl": "https://example.test/channels/thumb-002.jpg",
+              "videoPlayLen": 30000
+            }
+          ]
+        }
+      }
+    ],
+    "totalCount": 3,
+    "continueFlag": true
+  }
+}
