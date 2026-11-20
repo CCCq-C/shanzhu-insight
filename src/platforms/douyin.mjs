@@ -16,11 +16,14 @@ export const douyinCollector = {
 export function parseDouyinWorkList(payload) {
   assertSuccessful(payload);
   const items = Array.isArray(payload?.items) ? payload.items : [];
-  const awemes = Array.isArray(payload?.aweme_list) ? payload.aweme_list : [];
+  const remainingAwemes = [...(Array.isArray(payload?.aweme_list) ? payload.aweme_list : [])];
+  const pairs = items.map(item => {
+    const index = matchingAwemeIndex(item, remainingAwemes);
+    return { item, aweme: index >= 0 ? remainingAwemes.splice(index, 1)[0] : null };
+  });
+  pairs.push(...remainingAwemes.map(aweme => ({ item: null, aweme })));
   const byId = new Map();
-  for (let index = 0; index < Math.max(items.length, awemes.length); index += 1) {
-    const item = items[index] ?? null;
-    const aweme = awemes[index] ?? null;
+  for (const { item, aweme } of pairs) {
     const id = identifier(aweme?.aweme_id ?? aweme?.item_id ?? item?.item_id ?? item?.id);
     if (id) byId.set(id, { item, aweme });
   }
@@ -108,7 +111,13 @@ export async function collectDouyin({ context, since, limit = 100 }) {
     const accountPayloads = await Promise.all([
       fetchJson(page, USER_PATH),
       fetchJson(page, OVERVIEW_PATH),
-      fetchJson(page, FANS_HISTORY_PATH)
+      fetchJson(page, FANS_HISTORY_PATH).then(payload => {
+        assertSuccessful(payload);
+        return payload;
+      }).catch(() => {
+        warnings.push('粉丝历史暂不可用');
+        return null;
+      })
     ]);
 
     const account = parseDouyinAccount(accountPayloads);
@@ -204,6 +213,24 @@ function assertSuccessful(payload) {
 function identifier(value) {
   if (value == null || value === '') return null;
   return String(value);
+}
+
+function matchingAwemeIndex(item, awemes) {
+  const itemId = identifier(item?.item_id ?? item?.id);
+  if (!itemId) return -1;
+  const exact = awemes.findIndex(aweme => identifier(aweme?.aweme_id ?? aweme?.item_id) === itemId);
+  if (exact >= 0) return exact;
+  if (!/^\d{16,}$/.test(itemId)) return -1;
+  const createdAt = identifier(item?.create_time);
+  const rounded = awemes
+    .map((aweme, index) => ({ aweme, index }))
+    .filter(({ aweme }) => {
+      const exactId = identifier(aweme?.aweme_id ?? aweme?.item_id);
+      return /^\d{16,}$/.test(exactId)
+        && String(Number(exactId)) === itemId
+        && identifier(aweme?.create_time) === createdAt;
+    });
+  return rounded.length === 1 ? rounded[0].index : -1;
 }
 
 function metric(value) {

@@ -110,7 +110,9 @@ test('collectXiaohongshu captures first response and follows the returned page c
       }]
     }
   };
-  const { context, requestedUrls } = fakeContext({ secondPage });
+  const analysisPayload = structuredClone(analysisFixture);
+  analysisPayload.data.note_infos.push({ id: 'xhs-003', read_count: 200, view_time_avg: 10 });
+  const { context, requestedUrls } = fakeContext({ secondPage, analysisPayload });
 
   const result = await collectXiaohongshu({
     context,
@@ -124,6 +126,7 @@ test('collectXiaohongshu captures first response and follows the returned page c
   assert.equal(requestedUrls.some(url => url.includes('page=2')), true);
   assert.equal(result.accountSnapshot.followers, 50);
   assert.equal(result.metrics[0].averageWatchSeconds, 16);
+  assert.equal(result.metrics.find(metric => metric.postId === 'xhs-003').averageWatchSeconds, 10);
 });
 
 test('collectXiaohongshu stops at 100 items and marks remaining pages partial', async () => {
@@ -195,7 +198,7 @@ test('xiaohongshuCollector reports login redirects', async () => {
   }), { ok: false, reason: 'Login required' });
 });
 
-function fakeContext({ firstPage = postedFixture, secondPage, paginationError, analysisError } = {}) {
+function fakeContext({ firstPage = postedFixture, secondPage, paginationError, analysisError, analysisPayload = analysisFixture } = {}) {
   const requestedUrls = [];
   const firstUrl = 'https://creator.xiaohongshu.com/api/galaxy/v2/creator/note/user/posted?tab=0&page=0';
   const response = {
@@ -213,7 +216,7 @@ function fakeContext({ firstPage = postedFixture, secondPage, paginationError, a
       if (url.includes('/api/galaxy/user/info')) return structuredClone(fansFixture.userInfo);
       if (url.includes('/fans/overall_new')) return structuredClone(fansFixture.fans);
       if (url.includes('/note/analyze/list') && analysisError) throw analysisError;
-      if (url.includes('/note/analyze/list')) return structuredClone(analysisFixture);
+      if (url.includes('/note/analyze/list')) return structuredClone(analysisPayload);
       if (url.includes('/note/user/posted') && paginationError) throw paginationError;
       if (url.includes('/note/user/posted') && secondPage) return structuredClone(secondPage);
       throw new Error(`Unexpected URL: ${url}`);

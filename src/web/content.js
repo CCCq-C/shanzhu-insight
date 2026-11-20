@@ -4,12 +4,17 @@ const form = document.querySelector('#content-filters');
 const list = document.querySelector('#content-list');
 const insightDialog = document.querySelector('#content-insight-dialog');
 let insightCharts = [];
+let insightRequest = null;
 form.addEventListener('change', loadContents);
 list.addEventListener('click', event => {
   const button = event.target.closest('[data-open-content]');
   if (button) void openContentDetail(button.dataset.openContent);
 });
-insightDialog.addEventListener('close', disposeInsightCharts);
+insightDialog.addEventListener('close', () => {
+  insightRequest?.abort();
+  insightRequest = null;
+  disposeInsightCharts();
+});
 window.addEventListener('resize', () => insightCharts.forEach(chart => chart.resize()));
 loadPage();
 
@@ -62,17 +67,25 @@ function renderContents(contents) {
 }
 
 async function openContentDetail(contentId) {
+  insightRequest?.abort();
+  const request = new AbortController();
+  insightRequest = request;
   disposeInsightCharts();
   document.querySelector('#content-insight-title').textContent = '正在载入内容…';
   document.querySelector('#content-insight-meta').textContent = '正在读取三个平台的数据';
-  document.querySelector('#content-insight-table tbody').innerHTML = '<tr><td colspan="9">正在读取内容指标…</td></tr>';
+  document.querySelector('#content-insight-table tbody').innerHTML = '<tr><td colspan="11">正在读取内容指标…</td></tr>';
   if (!insightDialog.open) insightDialog.showModal();
   try {
-    renderContentDetail(await fetchJson(`/api/contents/${contentId}`));
+    const content = await fetchJson(`/api/contents/${contentId}`, { signal: request.signal });
+    if (insightRequest !== request) return;
+    renderContentDetail(content);
   } catch (error) {
+    if (request.signal.aborted || insightRequest !== request) return;
     document.querySelector('#content-insight-title').textContent = '内容数据载入失败';
     document.querySelector('#content-insight-meta').textContent = error.message;
-    document.querySelector('#content-insight-table tbody').innerHTML = '<tr><td colspan="9">请稍后重新采集再试。</td></tr>';
+    document.querySelector('#content-insight-table tbody').innerHTML = '<tr><td colspan="11">请稍后重新采集再试。</td></tr>';
+  } finally {
+    if (insightRequest === request) insightRequest = null;
   }
 }
 
@@ -90,19 +103,19 @@ function renderContentDetail(content) {
 function renderInsightRow(post, platformKey) {
   const platform = PLATFORMS[platformKey];
   const platformCell = `<span class="insight-platform"><i style="background:${platform.color}">${platform.short}</i>${platform.name}</span>`;
-  if (!post) return `<tr><td>${platformCell}</td><td colspan="8"><span class="metric-missing">未采集</span></td></tr>`;
+  if (!post) return `<tr><td>${platformCell}</td><td colspan="10"><span class="metric-missing">未采集</span></td></tr>`;
   const metrics = post.metrics || {};
-  const exposure = metrics.impressions == null && metrics.coverClickRate == null
-    ? missingMetric()
-    : `${formatMetric(metrics.impressions)} / ${formatOptionalRate(metrics.coverClickRate)}`;
+  const exposure = `${formatOptionalMetric(metrics.impressions)} / ${formatOptionalRate(metrics.coverClickRate)}`;
   return `<tr>
     <td>${platformCell}</td>
+    <td>${formatSeconds(metrics.durationSeconds)}</td>
     <td>${formatSeconds(metrics.averageWatchSeconds)}</td>
     <td>${formatOptionalRate(metrics.averageWatchProgress)}</td>
     <td>${formatOptionalRate(metrics.completionRate)}</td>
     <td>${formatOptionalRate(metrics.fiveSecondCompletionRate)}</td>
     <td>${formatOptionalRate(metrics.twoSecondBounceRate)}</td>
     <td>${formatOptionalRate(metrics.interactionRate)}</td>
+    <td>${formatOptionalMetric(metrics.followersGained)}</td>
     <td>${formatOptionalRate(metrics.followerConversionRate)}</td>
     <td>${exposure}</td>
   </tr>`;
@@ -141,6 +154,10 @@ function formatSeconds(value) {
 
 function formatOptionalRate(value) {
   return value == null || !Number.isFinite(Number(value)) ? missingMetric() : formatRate(value);
+}
+
+function formatOptionalMetric(value) {
+  return value == null || !Number.isFinite(Number(value)) ? missingMetric() : formatMetric(value);
 }
 
 function missingMetric() {

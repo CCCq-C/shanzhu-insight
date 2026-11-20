@@ -79,6 +79,39 @@ test('parseDouyinWorkList prefers exact string aweme IDs over rounded item numbe
   assert.equal(parseDouyinWorkList(payload).posts[0].postId, '7710071844748987658');
 });
 
+test('parseDouyinWorkList matches shuffled item and aweme arrays by identity', () => {
+  const payload = structuredClone(workFixture);
+  payload.aweme_list.reverse();
+
+  const result = parseDouyinWorkList(payload);
+
+  assert.equal(result.posts.find(post => post.postId === 'dy-001').title, 'AI 产品经理快速入门');
+  assert.equal(result.posts.find(post => post.postId === 'dy-002').title, '第二条作品');
+});
+
+test('parseDouyinWorkList does not join rounded IDs when publish times disagree', () => {
+  const payload = {
+    status_code: 0,
+    items: [{
+      id: 7710071844748987000,
+      description: '后台列表作品',
+      create_time: 1794988800,
+      metrics: { view_count: 1 }
+    }],
+    aweme_list: [{
+      aweme_id: '7710071844748987658',
+      item_title: '精确 ID 作品',
+      create_time: 1794902400,
+      statistics: { play_count: 2 }
+    }]
+  };
+
+  const result = parseDouyinWorkList(payload);
+
+  assert.equal(result.posts.length, 2);
+  assert.equal(result.posts.find(post => post.postId === '7710071844748987658').title, '精确 ID 作品');
+});
+
 test('parseDouyinAccount maps the owner account and real follower history', () => {
   assert.deepEqual(parseDouyinAccount([accountFixture.userInfo, accountFixture.overview, accountFixture.fansHistory]), {
     account: {
@@ -155,6 +188,20 @@ test('collectDouyin stops at 100 items and marks the result partial', async () =
   assert.equal(requestedUrls.filter(url => url.includes('/work_list')).length, 0);
 });
 
+test('collectDouyin keeps works when follower history is unavailable', async () => {
+  const { context } = fakeContext({ historyError: new Error('HTTP 404') });
+
+  const result = await collectDouyin({
+    context,
+    since: new Date('2026-11-01T00:00:00.000Z'),
+    limit: workFixture.items.length
+  });
+
+  assert.equal(result.posts.length, workFixture.items.length);
+  assert.deepEqual(result.accountHistory, []);
+  assert.deepEqual(result.warnings, ['粉丝历史暂不可用']);
+});
+
 test('douyinCollector reports login redirects', async () => {
   const page = {
     goto: async () => {},
@@ -167,7 +214,7 @@ test('douyinCollector reports login redirects', async () => {
   }), { ok: false, reason: 'Login required' });
 });
 
-function fakeContext({ firstPage = workFixture, secondPage } = {}) {
+function fakeContext({ firstPage = workFixture, secondPage, historyError } = {}) {
   const requestedUrls = [];
   const firstUrl = 'https://creator.douyin.com/janus/douyin/creator/pc/work_list?status=0&count=40&max_cursor=0';
   const response = {
@@ -184,6 +231,7 @@ function fakeContext({ firstPage = workFixture, secondPage } = {}) {
       requestedUrls.push(url);
       if (url.includes('/web/api/media/user/info/')) return structuredClone(accountFixture.userInfo);
       if (url.includes('/overview/all/')) return structuredClone(accountFixture.overview);
+      if (url.includes('/dashboard/fans') && historyError) throw historyError;
       if (url.includes('/dashboard/fans')) return structuredClone(accountFixture.fansHistory);
       if (url.includes('/work_list') && secondPage) return structuredClone(secondPage);
       throw new Error(`Unexpected URL: ${url}`);

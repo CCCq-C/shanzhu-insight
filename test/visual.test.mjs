@@ -182,6 +182,23 @@ test('content comparison dialog renders three charts and explicit missing metric
   assert.equal(mobileColumns, 1);
 });
 
+test('content comparison cancels a closed request before opening another item', async t => {
+  const page = await contentPage(t);
+  await page.route('**/api/contents/1', async route => {
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await route.continue().catch(() => {});
+  });
+
+  await page.locator('[data-open-content]').first().click();
+  await page.locator('#content-insight-dialog[open]').waitFor();
+  await page.locator('.dialog-close').click();
+  await page.locator('[data-open-content]').nth(1).click();
+  await page.waitForFunction(() => document.querySelector('#content-insight-title')?.textContent.includes('只有一个平台的内容'));
+  await page.waitForTimeout(300);
+
+  assert.match(await page.locator('#content-insight-title').textContent(), /只有一个平台的内容/);
+});
+
 async function dashboardPage(t, { runCollection = async () => [], runLogin = async () => {}, setupDb = () => {} } = {}) {
   const db = openDatabase(':memory:');
   initSchema(db);

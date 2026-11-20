@@ -64,6 +64,8 @@ test('content HTML contains filters and the deep comparison dialog', () => {
     'interaction-rate-chart',
     'follower-conversion-chart'
   ]) assert.match(html, new RegExp(`id=["']${id}["']`));
+  assert.match(html, /视频时长/);
+  assert.match(html, /涨粉数/);
   assert.match(html, /\/vendor\/echarts\.min\.js/);
   assert.match(html, /<main/);
   assert.doesNotMatch(html, /<(?:script|link)[^>]+(?:src|href)=["']https?:/i);

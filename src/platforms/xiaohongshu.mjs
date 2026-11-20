@@ -135,7 +135,7 @@ export async function collectXiaohongshu({ context, since, limit = 100, now = ne
         warnings.push('笔记后续分页请求被平台拒绝');
         break;
       }
-      const next = parseXiaohongshuPosted(payload);
+      const next = parseXiaohongshuPosted(payload, analysisPayload);
       addPage(next, allPosts, allMetrics, limit);
       reportedTotal = Math.max(reportedTotal, next.reportedTotal, allPosts.size);
       hasMore = next.hasMore;

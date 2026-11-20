@@ -405,8 +405,7 @@ function migrateRoundedDouyinId(db, post, exactId) {
 
 function likelyRoundedId(previousId, exactId) {
   if (!/^\d{16,}$/.test(previousId) || !/^\d{16,}$/.test(exactId)) return false;
-  const difference = BigInt(previousId) - BigInt(exactId);
-  return difference !== 0n && (difference < 0n ? -difference : difference) <= 1024n;
+  return previousId !== exactId && previousId === String(Number(exactId));
 }
 
 export function getContents(db, filters = {}) {

@@ -171,6 +171,25 @@ test('saveCollection migrates a rounded Douyin ID without duplicating content', 
   `).get().count, 2);
 });
 
+test('saveCollection does not migrate a nearby Douyin ID that was not Number-rounded', () => {
+  const db = createDatabase();
+  const nearbyId = '7710071844748987657';
+  const exactId = '7710071844748987658';
+  saveCollection(db, result({
+    posts: [{ ...result().posts[0], postId: nearbyId }],
+    metrics: [{ ...result().metrics[0], postId: nearbyId }]
+  }), new Date('2026-11-19T10:00:00+08:00'));
+  saveCollection(db, result({
+    posts: [{ ...result().posts[0], postId: exactId }],
+    metrics: [{ ...result().metrics[0], postId: exactId }]
+  }), new Date('2026-11-20T10:00:00+08:00'));
+
+  assert.deepEqual(db.prepare('SELECT post_id FROM platform_posts ORDER BY post_id').all().map(row => row.post_id), [
+    nearbyId,
+    exactId
+  ]);
+});
+
 test('getContentDetail returns current comparison metrics and daily history', () => {
   assert.equal(typeof dbModule.getContentDetail, 'function');
   const db = createDatabase();
