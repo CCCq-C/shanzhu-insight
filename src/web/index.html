@@ -28,6 +28,8 @@
   </header>
 
   <main id="main-content" class="dashboard-shell">
+    <section class="auth-alerts" id="auth-alerts" aria-live="polite" hidden></section>
+
     <section class="hero-grid" aria-label="核心数据">
       <article class="panel latest-panel" id="latest-content" data-fd-id="latest-content">
         <div class="section-heading">
@@ -58,7 +60,7 @@
       <article class="panel follower-panel" data-fd-id="follower-panel">
         <div class="section-heading compact">
           <div><span class="eyebrow">粉丝资产</span><div class="hero-number" id="total-followers">—</div></div>
-          <span class="trend-chip" id="follower-change">近 7 天 —</span>
+          <div class="follower-summary"><span>全平台 · 近 30 天</span><strong class="trend-chip" id="follower-change">近 7 天 —</strong></div>
         </div>
         <div class="chart" id="followers-chart" role="img" aria-label="近 30 天平台粉丝趋势图"></div>
       </article>
@@ -88,6 +90,15 @@
     </section>
   </main>
 
+  <dialog class="task-dialog" id="task-dialog" aria-labelledby="task-title">
+    <div class="task-dialog-head">
+      <span class="task-indicator" aria-hidden="true"></span>
+      <div><span class="eyebrow">任务状态</span><h2 id="task-title">准备中</h2></div>
+    </div>
+    <p id="task-detail">正在准备后台任务。</p>
+    <div class="task-platforms" id="task-platforms"></div>
+    <button class="secondary-button" id="task-close" type="button">收起</button>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script src="/vendor/echarts.min.js"></script>
   <script type="module" src="/app.js"></script>

@@ -55,6 +55,68 @@ test('cover tilt batches pointer movement into the next animation frame', async 
   assert.match(result.animated, /rotateY\(/);
 });
 
+test('dashboard exposes three login controls and visible one-point follower trends', async t => {
+  const page = await dashboardPage(t);
+  const result = await page.evaluate(() => ({
+    loginButtons: document.querySelectorAll('[data-login-platform]').length,
+    followerSeries: echarts.getInstanceByDom(document.querySelector('#followers-chart')).getOption().series,
+    miniSeries: [...document.querySelectorAll('.mini-chart')].map(element => (
+      echarts.getInstanceByDom(element).getOption().series[0]
+    ))
+  }));
+
+  assert.equal(result.loginButtons, 3);
+  assert.equal(result.followerSeries.length, 3);
+  assert.equal(result.followerSeries.every(series => series.showSymbol === true), true);
+  assert.equal(result.miniSeries.length, 3);
+  assert.equal(result.miniSeries.every(series => series.showSymbol === true), true);
+});
+
+test('manual collection shows webpage progress while Chrome stays in background', async t => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const page = await dashboardPage(t, {
+    runCollection: async () => {
+      await gate;
+      return [{ platform: 'douyin', status: 'success' }];
+    }
+  });
+  const fallback = setTimeout(() => release(), 2000);
+  t.after(() => { clearTimeout(fallback); release(); });
+
+  await page.locator('#collect-now').click();
+  await page.locator('#task-dialog[open]').waitFor({ timeout: 1000 });
+  assert.match(await page.locator('#task-title').textContent(), /后台采集/);
+  assert.match(await page.locator('#task-detail').textContent(), /不会显示浏览器/);
+
+  release();
+  await page.waitForFunction(() => /采集完成/.test(document.querySelector('#task-title')?.textContent || ''));
+});
+
+test('expired cookies show an actionable platform login alert', async t => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const page = await dashboardPage(t, {
+    runLogin: async () => { await gate; },
+    setupDb: db => db.prepare(`
+      INSERT INTO collector_runs (platform, started_at, finished_at, status, error)
+      VALUES ('xiaohongshu', '2026-11-20T01:00:00.000Z', '2026-11-20T01:00:01.000Z', 'needs_login', 'Login required')
+    `).run()
+  });
+  const fallback = setTimeout(() => release(), 2000);
+  t.after(() => { clearTimeout(fallback); release(); });
+
+  const alert = page.locator('#auth-alerts');
+  await alert.waitFor();
+  assert.match(await alert.textContent(), /小红书.*重新登录/);
+  await alert.locator('[data-login-platform="xiaohongshu"]').click();
+  await page.locator('#task-dialog[open]').waitFor({ timeout: 1000 });
+  assert.match(await page.locator('#task-title').textContent(), /登录小红书/);
+
+  release();
+  await page.waitForFunction(() => /登录成功/.test(document.querySelector('#task-title')?.textContent || ''));
+});
+
 test('content archive uses two-column magazine cards with visible platform metrics', async t => {
   const page = await contentPage(t);
   const desktop = await page.evaluate(() => {
@@ -92,10 +154,14 @@ test('content archive uses two-column magazine cards with visible platform metri
   assert.equal(mobileColumns, 1);
 });
 
-async function dashboardPage(t) {
+async function dashboardPage(t, { runCollection = async () => [], runLogin = async () => {}, setupDb = () => {} } = {}) {
   const db = openDatabase(':memory:');
   initSchema(db);
-  const server = await startServer({ db, port: 0, runCollection: async () => [], write: () => {} });
+  for (const [platform, views] of [['xiaohongshu', 120], ['douyin', 350], ['channels', 230]]) {
+    saveCollection(db, contentCollection(platform, views), new Date('2026-11-20T04:00:00.000Z'));
+  }
+  setupDb(db);
+  const server = await startServer({ db, port: 0, runCollection, runLogin, write: () => {} });
   const browser = await chromium.launch({ executablePath: findChromeExecutable(), headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   t.after(async () => {

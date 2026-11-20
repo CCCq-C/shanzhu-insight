@@ -3,31 +3,61 @@ import { PLATFORMS, escapeHtml, fetchJson, formatDateTime, formatMetric, formatR
 let charts = [];
 
 loadDashboard();
+enableCoverTilt();
 document.querySelector('#collect-now').addEventListener('click', collectNow);
+document.querySelector('#task-close').addEventListener('click', () => document.querySelector('#task-dialog').close());
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-login-platform]');
+  if (button) void loginPlatform(button.dataset.loginPlatform);
+});
 window.addEventListener('resize', () => charts.forEach(chart => chart.resize()));
+setInterval(() => loadDashboard({ silent: true }), 30_000);
 
-async function loadDashboard() {
+async function loadDashboard({ silent = false } = {}) {
   try {
     const [overview, health] = await Promise.all([fetchJson('/api/overview'), fetchJson('/api/health')]);
+    charts.forEach(chart => chart.dispose());
+    charts = [];
     renderHeader(overview, health);
+    renderAuthAlerts(health);
+    renderRuntime(health);
     renderLatest(overview);
     renderFollowers(overview);
     renderInsights(overview);
-    renderPlatforms(overview);
+    renderPlatforms(overview, health);
     renderComparison(overview);
-    enableCoverTilt();
   } catch (error) {
-    showToast(`看板载入失败：${error.message}`);
+    if (!silent) showToast(`看板载入失败：${error.message}`);
   }
 }
 
 function renderHeader(overview, health) {
   const statusByPlatform = new Map((health.platforms || []).map(record => [record.platform, record]));
+  const loginByPlatform = new Map((health.logins || []).map(record => [record.platform, record]));
   document.querySelector('#header-status').innerHTML = Object.entries(PLATFORMS).map(([key, platform]) => {
-    const presentation = statusPresentation(statusByPlatform.get(key));
+    const presentation = platformPresentation(statusByPlatform.get(key), loginByPlatform.get(key));
     return `<span class="status-pill ${presentation.tone}" title="${presentation.label}">${platform.name}</span>`;
   }).join('');
   document.querySelector('#last-updated').textContent = formatDateTime(overview.lastCollectedAt);
+}
+
+function renderAuthAlerts(health) {
+  const alert = document.querySelector('#auth-alerts');
+  const loginByPlatform = new Map((health.logins || []).map(record => [record.platform, record]));
+  const expired = (health.platforms || []).filter(record => (
+    record.status === 'needs_login' && platformPresentation(record, loginByPlatform.get(record.platform)).label === '需要登录'
+  ));
+  alert.hidden = expired.length === 0;
+  alert.innerHTML = expired.map(record => {
+    const platform = PLATFORMS[record.platform] || { name: record.platform };
+    return `<div class="auth-alert-item"><div><strong>${platform.name} Cookie 已失效</strong><span>重新登录后，后台采集会继续使用新的 Cookie。</span></div><button class="secondary-button" type="button" data-login-platform="${record.platform}">重新登录</button></div>`;
+  }).join('');
+}
+
+function renderRuntime(health) {
+  const button = document.querySelector('#collect-now');
+  button.disabled = Boolean(health.job);
+  button.textContent = health.job?.type === 'collect' ? '后台采集中…' : health.job?.type === 'login' ? '登录处理中…' : '立即采集';
 }
 
 function renderLatest(overview) {
@@ -104,17 +134,19 @@ function renderInsights(overview) {
     : '<div class="empty-block">有足够数据后，自动生成可解释洞察。</div>';
 }
 
-function renderPlatforms(overview) {
+function renderPlatforms(overview, health) {
   const grid = document.querySelector('#platform-grid');
   const byPlatform = new Map(overview.platforms.map(platform => [platform.platform, platform]));
+  const statusByPlatform = new Map((health.platforms || []).map(record => [record.platform, record]));
+  const loginByPlatform = new Map((health.logins || []).map(record => [record.platform, record]));
   grid.innerHTML = Object.entries(PLATFORMS).map(([key, metadata], index) => {
     const data = byPlatform.get(key) || { platform: key, history: [] };
-    const state = statusPresentation(data);
+    const state = platformPresentation(statusByPlatform.get(key) || data, loginByPlatform.get(key));
     const delta = data.followerChange7d;
     return `<article class="panel platform-card" style="--platform-color:${metadata.color}">
-      <div class="platform-card-head"><div class="platform-name"><span class="platform-icon" style="background:${metadata.color}">${metadata.short}</span>${metadata.name}</div><span class="platform-status">${state.label}</span></div>
+      <div class="platform-card-head"><div class="platform-name"><span class="platform-icon" style="background:${metadata.color}">${metadata.short}</span>${metadata.name}</div><div class="platform-card-tools"><span class="platform-status">${state.label}</span><button class="login-button" type="button" data-login-platform="${key}" ${health.job ? 'disabled' : ''}>登录/更新 Cookie</button></div></div>
       <div class="platform-followers"><span>粉丝</span><strong>${formatMetric(data.followers)}</strong></div>
-      <div class="mini-chart" id="mini-chart-${index}" aria-label="${metadata.name}粉丝趋势"></div>
+      <div class="mini-chart" id="mini-chart-${index}" aria-label="${metadata.name}近 30 天粉丝趋势"></div>
       <div class="platform-foot">近 7 天 ${delta == null ? '—' : `${delta >= 0 ? '+' : ''}${formatMetric(delta)}`}</div>
     </article>`;
   }).join('');
@@ -157,37 +189,119 @@ function createLineChart(element, platforms) {
     grid: { top: 40, right: 8, bottom: 14, left: 5, containLabel: true },
     xAxis: { type: 'category', boundaryGap: false, data: dates, axisLine: { lineStyle: { color: '#E4E4E8' } }, axisTick: { show: false }, axisLabel: { color: '#86868B', fontSize: 10, formatter: value => value.slice(5) } },
     yAxis: { type: 'value', scale: true, splitNumber: 4, splitLine: { lineStyle: { color: '#EEEEF1' } }, axisLabel: { color: '#86868B', fontSize: 10 }, axisLine: { show: false }, axisTick: { show: false } },
-    series: platforms.map(platform => ({ name: PLATFORMS[platform.platform]?.name || platform.platform, type: 'line', smooth: .3, symbol: 'circle', symbolSize: 5, showSymbol: false, lineStyle: { width: 2.5 }, areaStyle: { opacity: .06 }, data: dates.map(date => platform.history.find(point => point.date === date)?.followers ?? null) }))
+    series: platforms.map(platform => ({ name: PLATFORMS[platform.platform]?.name || platform.platform, type: 'line', smooth: .3, symbol: 'circle', symbolSize: 6, showSymbol: dates.length <= 1, lineStyle: { width: 2.5 }, areaStyle: { opacity: .06 }, data: dates.map(date => platform.history.find(point => point.date === date)?.followers ?? null) }))
   });
   return chart;
 }
 
 function createMiniChart(element, platform, color) {
+  const history = platform?.history || [];
   const chart = echarts.init(element, null, { renderer: 'svg' });
   chart.setOption({
     animationDuration: 460,
     animationEasing: 'cubicOut',
     grid: { inset: 0, left: 0, right: 0, top: 8, bottom: 0 },
-    xAxis: { type: 'category', show: false, data: platform?.history.map(point => point.date) || [] },
+    xAxis: { type: 'category', show: false, data: history.map(point => point.date) },
     yAxis: { type: 'value', show: false, scale: true },
-    series: [{ type: 'line', smooth: .35, showSymbol: false, lineStyle: { color, width: 2 }, areaStyle: { color, opacity: .09 }, data: platform?.history.map(point => point.followers) || [] }]
+    series: [{ type: 'line', smooth: .35, symbolSize: 6, showSymbol: history.length <= 1, lineStyle: { color, width: 2 }, areaStyle: { color, opacity: .09 }, data: history.map(point => point.followers) }]
   });
   return chart;
 }
 
 async function collectNow() {
   const button = document.querySelector('#collect-now');
+  openTaskDialog('后台采集中', 'Chrome 不会显示浏览器，任务会在后台完成。');
   button.disabled = true;
-  button.textContent = '采集中…';
+  button.textContent = '后台采集中…';
+  const poller = setInterval(() => refreshTaskProgress(), 1000);
   try {
-    await fetchJson('/api/collect', { method: 'POST' });
-    showToast('采集完成，正在刷新看板。');
-    setTimeout(() => location.reload(), 500);
+    const response = await fetchJson('/api/collect', { method: 'POST' });
+    renderTaskRows(response.results.map(result => ({ platform: result.platform, label: statusPresentation(result).label })));
+    finishTaskDialog('采集完成', '数据已经更新，看板正在刷新。', 'success');
+    await loadDashboard({ silent: true });
   } catch (error) {
-    showToast(error.status === 409 ? '已有采集任务运行中。' : `采集失败：${error.message}`);
+    finishTaskDialog('采集未完成', error.status === 409 ? '已有后台任务运行中。' : `采集失败：${error.message}`, 'error');
     button.disabled = false;
     button.textContent = '立即采集';
+  } finally {
+    clearInterval(poller);
   }
+}
+
+async function loginPlatform(platform) {
+  const metadata = PLATFORMS[platform];
+  if (!metadata) return;
+  openTaskDialog(`登录${metadata.name}`, `已打开${metadata.name}创作者后台。完成登录后，窗口会自动关闭。`);
+  renderTaskRows([{ platform, label: '等待登录' }]);
+  try {
+    await fetchJson(`/api/login/${platform}`, { method: 'POST' });
+    const login = await waitForLogin(platform);
+    if (login.status === 'success') {
+      finishTaskDialog('登录成功', `${metadata.name} Cookie 已更新，将用于后续后台采集。`, 'success');
+      await loadDashboard({ silent: true });
+    } else {
+      finishTaskDialog('登录失败', `${metadata.name}未完成登录，请重试。`, 'error');
+    }
+  } catch (error) {
+    finishTaskDialog('无法开始登录', error.status === 409 ? '已有后台任务运行中。' : `登录失败：${error.message}`, 'error');
+  }
+}
+
+async function waitForLogin(platform) {
+  const deadline = Date.now() + 310_000;
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const health = await fetchJson('/api/health');
+    const login = (health.logins || []).find(record => record.platform === platform);
+    renderTaskRows([{ platform, label: login?.status === 'running' ? '等待登录' : login?.status === 'success' ? '登录成功' : login?.status === 'error' ? '登录失败' : '准备中' }]);
+    if (login && login.status !== 'running') return login;
+  }
+  return { platform, status: 'error' };
+}
+
+async function refreshTaskProgress() {
+  try {
+    const health = await fetchJson('/api/health');
+    if (health.job?.type !== 'collect') return;
+    renderTaskRows(Object.keys(PLATFORMS).map(platform => {
+      const record = (health.platforms || []).find(candidate => candidate.platform === platform);
+      const current = record?.startedAt && record.startedAt >= health.job.startedAt;
+      return { platform, label: current ? statusPresentation(record).label : '等待采集' };
+    }));
+  } catch {}
+}
+
+function openTaskDialog(title, detail) {
+  const dialog = document.querySelector('#task-dialog');
+  dialog.classList.remove('success', 'error');
+  document.querySelector('#task-title').textContent = title;
+  document.querySelector('#task-detail').textContent = detail;
+  document.querySelector('#task-close').textContent = '收起';
+  renderTaskRows(Object.keys(PLATFORMS).map(platform => ({ platform, label: '准备中' })));
+  if (!dialog.open) dialog.showModal();
+}
+
+function finishTaskDialog(title, detail, tone) {
+  const dialog = document.querySelector('#task-dialog');
+  dialog.classList.add(tone);
+  document.querySelector('#task-title').textContent = title;
+  document.querySelector('#task-detail').textContent = detail;
+  document.querySelector('#task-close').textContent = '完成';
+}
+
+function renderTaskRows(rows) {
+  document.querySelector('#task-platforms').innerHTML = rows.map(row => {
+    const platform = PLATFORMS[row.platform] || { name: row.platform, short: '?', color: '#73737B' };
+    return `<div class="task-platform-row"><span class="platform-icon" style="background:${platform.color}">${platform.short}</span><strong>${platform.name}</strong><em>${row.label}</em></div>`;
+  }).join('');
+}
+
+function platformPresentation(record = {}, login) {
+  const collectedAt = record.finishedAt || record.lastCollectedAt;
+  if (login?.status === 'success' && (!collectedAt || login.finishedAt > collectedAt)) {
+    return { label: '已登录', tone: 'success' };
+  }
+  return statusPresentation(record);
 }
 
 function enableCoverTilt() {

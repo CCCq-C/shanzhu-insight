@@ -35,7 +35,11 @@ test('dashboard HTML contains the approved information architecture', () => {
     'followers-chart',
     'insights-list',
     'platform-grid',
-    'comparison-chart'
+    'comparison-chart',
+    'auth-alerts',
+    'task-dialog',
+    'task-title',
+    'task-platforms'
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }

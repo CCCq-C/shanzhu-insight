@@ -152,7 +152,7 @@ async function collectWithBrowser(db) {
 
 function getHealth(db, { job, nextCollectionAt, logins }) {
   const rows = db.prepare(`
-    SELECT platform, status, finished_at, partial, error
+    SELECT platform, status, started_at, finished_at, partial, error
     FROM collector_runs runs
     WHERE id = (SELECT MAX(latest.id) FROM collector_runs latest WHERE latest.platform = runs.platform)
     ORDER BY platform
@@ -166,6 +166,7 @@ function getHealth(db, { job, nextCollectionAt, logins }) {
     platforms: rows.map(row => ({
       platform: row.platform,
       status: row.status,
+      startedAt: row.started_at,
       finishedAt: row.finished_at,
       partial: Boolean(row.partial),
       error: row.error
