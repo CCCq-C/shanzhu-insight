@@ -81,6 +81,16 @@ test('parseXiaohongshuFans combines account identity and follower total', () => 
   });
 });
 
+test('parseXiaohongshuFans keeps Beijing dates for numeric history timestamps', () => {
+  const fixture = structuredClone(fansFixture);
+  fixture.fans.data.thirty.fans_list = [{
+    date: Date.parse('2026-11-18T16:00:00.000Z'),
+    count: 48
+  }];
+
+  assert.equal(parseXiaohongshuFans([fixture.userInfo, fixture.fans]).accountHistory[0].date, '2026-11-19');
+});
+
 test('collectXiaohongshu captures first response and follows the returned page cursor', async () => {
   const secondPage = {
     code: 0,

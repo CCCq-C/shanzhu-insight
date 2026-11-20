@@ -4,6 +4,9 @@ const POSTED_PATH = '/api/galaxy/v2/creator/note/user/posted';
 const USER_PATH = '/api/galaxy/user/info';
 const FANS_PATH = '/api/galaxy/creator/data/fans/overall_new';
 const ANALYSIS_PATH = '/api/galaxy/creator/datacenter/note/analyze/list';
+const SHANGHAI_DATE = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+});
 
 export const xiaohongshuCollector = {
   platform: 'xiaohongshu',
@@ -217,7 +220,7 @@ function epochDate(value) {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return null;
-  return new Date(number > 10_000_000_000 ? number : number * 1000).toISOString().slice(0, 10);
+  return SHANGHAI_DATE.format(new Date(number > 10_000_000_000 ? number : number * 1000));
 }
 
 function analysisUrl(since, now) {
