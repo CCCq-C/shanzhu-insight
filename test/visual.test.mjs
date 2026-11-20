@@ -59,21 +59,30 @@ test('content archive uses two-column magazine cards with visible platform metri
   const page = await contentPage(t);
   const desktop = await page.evaluate(() => {
     const list = document.querySelector('#content-list');
-    const card = document.querySelector('.content-item');
+    const cards = [...document.querySelectorAll('.content-item')];
+    const card = cards[0];
+    const partialCard = cards[1];
     const platformCards = [...card.querySelectorAll('.post-card')];
+    const partialPlatformCards = [...partialCard.querySelectorAll('.post-card')];
     return {
+      cards: cards.length,
       columns: getComputedStyle(list).gridTemplateColumns.split(' ').length,
       coverWidth: Number.parseFloat(getComputedStyle(card.querySelector('.content-thumb')).width),
       platformCards: platformCards.length,
       allPlatformsVisible: platformCards.every(item => item.getClientRects().length > 0),
+      partialPlatformCards: partialPlatformCards.length,
+      missingLabels: partialCard.querySelectorAll('.post-empty-label').length,
       cardTag: card.tagName
     };
   });
 
+  assert.equal(desktop.cards, 2);
   assert.equal(desktop.columns, 2);
   assert.ok(desktop.coverWidth >= 100, `cover width was ${desktop.coverWidth}px`);
   assert.equal(desktop.platformCards, 3);
   assert.equal(desktop.allPlatformsVisible, true);
+  assert.equal(desktop.partialPlatformCards, 3);
+  assert.equal(desktop.missingLabels, 2);
   assert.equal(desktop.cardTag, 'ARTICLE');
 
   await page.setViewportSize({ width: 760, height: 900 });
@@ -117,26 +126,45 @@ async function contentPage(t) {
 }
 
 function contentCollection(platform, views) {
+  const posts = [{
+    postId: `${platform}-post`,
+    title: '跨平台内容样片',
+    url: `https://example.test/${platform}`,
+    coverUrl: null,
+    publishedAt: '2026-11-20T02:00:00.000Z'
+  }];
+  const metrics = [{
+    postId: `${platform}-post`,
+    views,
+    likes: 10,
+    comments: 2,
+    favorites: 3,
+    shares: 1
+  }];
+  if (platform === 'xiaohongshu') {
+    posts.push({
+      postId: 'xiaohongshu-partial',
+      title: '只有一个平台的内容',
+      url: 'https://example.test/xiaohongshu-partial',
+      coverUrl: null,
+      publishedAt: '2026-11-19T02:00:00.000Z'
+    });
+    metrics.push({
+      postId: 'xiaohongshu-partial',
+      views: 80,
+      likes: 4,
+      comments: 1,
+      favorites: 2,
+      shares: 0
+    });
+  }
   return {
     platform,
     account: { platformAccountId: `${platform}-account`, displayName: platform, avatarUrl: null },
     accountSnapshot: { followers: 10, following: null, likesReceived: null },
-    posts: [{
-      postId: `${platform}-post`,
-      title: '跨平台内容样片',
-      url: `https://example.test/${platform}`,
-      coverUrl: null,
-      publishedAt: '2026-11-20T02:00:00.000Z'
-    }],
-    metrics: [{
-      postId: `${platform}-post`,
-      views,
-      likes: 10,
-      comments: 2,
-      favorites: 3,
-      shares: 1
-    }],
-    reportedTotal: 1,
+    posts,
+    metrics,
+    reportedTotal: posts.length,
     partial: false,
     warnings: []
   };
