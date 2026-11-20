@@ -43,6 +43,31 @@ test('overview and content APIs expose stored data and platform filters', async 
   assert.equal(contents[0].posts.find(post => post.platform === 'xiaohongshu').metrics.views, 200);
 });
 
+test('content detail API exposes current platform metrics and history', async t => {
+  const server = await startServer({ db: seededDatabase(), port: 0, write: () => {} });
+  t.after(() => close(server));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/contents/1`);
+  const detail = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(detail.id, 1);
+  assert.deepEqual(detail.posts.map(post => post.platform).sort(), ['douyin', 'xiaohongshu']);
+  assert.equal(detail.posts.every(post => post.history.length === 1), true);
+});
+
+test('content detail API returns 404 for invalid and missing IDs', async t => {
+  const server = await startServer({ db: seededDatabase(), port: 0, write: () => {} });
+  t.after(() => close(server));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  for (const path of ['/api/contents/not-a-number', '/api/contents/999']) {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), { code: 'not_found' });
+  }
+});
+
 test('unknown routes return JSON 404 without exposing filesystem paths', async t => {
   const server = await startServer({ db: seededDatabase(), port: 0, write: () => {} });
   t.after(() => close(server));

@@ -6,7 +6,7 @@ import { openPersistentBrowser } from './browser.mjs';
 import { collectAll, defaultCollectors } from './collect.mjs';
 import { config } from './config.mjs';
 import { createCoverStore } from './covers.mjs';
-import { getContents, getOverview, initSchema, openDatabase } from './db.mjs';
+import { getContentDetail, getContents, getOverview, initSchema, openDatabase } from './db.mjs';
 import { loginToPlatform } from './login.mjs';
 
 const DEFAULT_COLLECTION_INTERVAL_MS = 15 * 60 * 1000;
@@ -40,6 +40,13 @@ export function createServer({
           from: url.searchParams.get('from') || undefined,
           to: url.searchParams.get('to') || undefined
         }));
+      }
+      const contentMatch = request.method === 'GET' && url.pathname.match(/^\/api\/contents\/(\d+)$/);
+      if (contentMatch) {
+        const detail = getContentDetail(db, Number(contentMatch[1]));
+        return detail
+          ? sendJson(response, 200, detail)
+          : sendJson(response, 404, { code: 'not_found' });
       }
       if (request.method === 'POST' && url.pathname === '/api/collect') {
         if (job) return sendJson(response, 409, { code: 'already_running' });
