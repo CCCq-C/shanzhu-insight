@@ -107,6 +107,97 @@ test('a concurrent collect request receives 409 already_running', async t => {
   assert.equal((await first).status, 200);
 });
 
+test('server schedules collection and reports the next run', async t => {
+  let collections = 0;
+  const server = await startServer({
+    db: seededDatabase(),
+    port: 0,
+    write: () => {},
+    collectionIntervalMs: 20,
+    runCollection: async () => { collections += 1; return []; }
+  });
+  t.after(() => close(server));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  await waitFor(() => collections >= 1);
+  const health = await fetch(`${base}/api/health`).then(response => response.json());
+
+  assert.ok(collections >= 1);
+  assert.match(health.nextCollectionAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test('platform login runs in background and blocks concurrent collection', async t => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const server = await startServer({
+    db: seededDatabase(),
+    port: 0,
+    write: () => {},
+    runCollection: async () => [],
+    runLogin: async () => { await gate; return { platform: 'douyin', status: 'success' }; }
+  });
+  t.after(() => close(server));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const started = await fetch(`${base}/api/login/douyin`, { method: 'POST' });
+  assert.equal(started.status, 202);
+  assert.deepEqual(await started.json(), { ok: true, platform: 'douyin', status: 'running' });
+
+  const running = await fetch(`${base}/api/health`).then(response => response.json());
+  assert.equal(running.job.type, 'login');
+  assert.equal(running.job.platform, 'douyin');
+  assert.equal(running.logins.find(login => login.platform === 'douyin').status, 'running');
+
+  const blocked = await fetch(`${base}/api/collect`, { method: 'POST' });
+  assert.equal(blocked.status, 409);
+  assert.deepEqual(await blocked.json(), { code: 'already_running' });
+
+  release();
+  await waitFor(async () => {
+    const health = await fetch(`${base}/api/health`).then(response => response.json());
+    return health.logins.find(login => login.platform === 'douyin')?.status === 'success';
+  });
+});
+
+test('login API rejects unsupported platforms without starting a job', async t => {
+  let called = false;
+  const server = await startServer({
+    db: seededDatabase(),
+    port: 0,
+    write: () => {},
+    runLogin: async () => { called = true; }
+  });
+  t.after(() => close(server));
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/login/unknown`, { method: 'POST' });
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { code: 'unsupported_platform' });
+  assert.equal(called, false);
+});
+
+test('login API records synchronous login failures without exposing error details', async t => {
+  const server = await startServer({
+    db: seededDatabase(),
+    port: 0,
+    write: () => {},
+    runLogin: () => { throw new Error('cookie=private'); }
+  });
+  t.after(() => close(server));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const response = await fetch(`${base}/api/login/channels`, { method: 'POST' });
+  assert.equal(response.status, 202);
+  await waitFor(async () => {
+    const health = await fetch(`${base}/api/health`).then(result => result.json());
+    return health.logins.find(login => login.platform === 'channels')?.status === 'error';
+  });
+  const health = await fetch(`${base}/api/health`).then(result => result.json());
+
+  assert.equal(health.job, null);
+  assert.equal(health.logins.find(login => login.platform === 'channels').error, 'Login failed');
+  assert.doesNotMatch(JSON.stringify(health), /cookie=private/);
+});
+
 function seededDatabase() {
   const db = openDatabase(':memory:');
   initSchema(db);
@@ -138,4 +229,13 @@ function collection(platform, followers, views) {
 
 function close(server) {
   return new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+}
+
+async function waitFor(predicate, timeoutMs = 1000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for condition');
 }

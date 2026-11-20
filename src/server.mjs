@@ -7,20 +7,29 @@ import { collectAll, defaultCollectors } from './collect.mjs';
 import { config } from './config.mjs';
 import { createCoverStore } from './covers.mjs';
 import { getContents, getOverview, initSchema, openDatabase } from './db.mjs';
+import { loginToPlatform } from './login.mjs';
+
+const DEFAULT_COLLECTION_INTERVAL_MS = 15 * 60 * 1000;
+const LOGIN_PLATFORMS = new Set(defaultCollectors.map(collector => collector.platform));
 
 export function createServer({
   db,
   runCollection,
+  runLogin,
+  collectionIntervalMs = DEFAULT_COLLECTION_INTERVAL_MS,
+  now = Date.now,
   coverStore = createCoverStore({ cacheDir: path.join(config.dataDir, 'covers') }),
   webRoot = path.join(config.projectRoot, 'src', 'web')
 }) {
-  let collecting = false;
+  let job = null;
+  const logins = new Map();
+  let nextCollectionAt = new Date(now() + collectionIntervalMs).toISOString();
 
-  return http.createServer(async (request, response) => {
+  const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, 'http://127.0.0.1');
       if (request.method === 'GET' && url.pathname === '/api/health') {
-        return sendJson(response, 200, getHealth(db));
+        return sendJson(response, 200, getHealth(db, { job, nextCollectionAt, logins }));
       }
       if (request.method === 'GET' && url.pathname === '/api/overview') {
         return sendJson(response, 200, getOverview(db));
@@ -33,13 +42,16 @@ export function createServer({
         }));
       }
       if (request.method === 'POST' && url.pathname === '/api/collect') {
-        if (collecting) return sendJson(response, 409, { code: 'already_running' });
-        collecting = true;
-        try {
-          return sendJson(response, 200, { ok: true, results: await runCollection() });
-        } finally {
-          collecting = false;
-        }
+        if (job) return sendJson(response, 409, { code: 'already_running' });
+        return sendJson(response, 200, { ok: true, results: await collect() });
+      }
+      const loginMatch = request.method === 'POST' && url.pathname.match(/^\/api\/login\/([a-z][a-z0-9_-]{0,31})$/);
+      if (loginMatch) {
+        const platform = loginMatch[1];
+        if (!LOGIN_PLATFORMS.has(platform)) return sendJson(response, 404, { code: 'unsupported_platform' });
+        if (job) return sendJson(response, 409, { code: 'already_running' });
+        startLogin(platform);
+        return sendJson(response, 202, { ok: true, platform, status: 'running' });
       }
       const coverMatch = request.method === 'GET'
         && url.pathname.match(/^\/covers\/([a-z][a-z0-9_-]{0,31})\/([A-Za-z0-9_-]{1,200})$/);
@@ -73,6 +85,36 @@ export function createServer({
       return sendJson(response, 500, { code: 'internal_error' });
     }
   });
+
+  const timer = setInterval(() => {
+    nextCollectionAt = new Date(now() + collectionIntervalMs).toISOString();
+    if (!job) void collect().catch(() => {});
+  }, collectionIntervalMs);
+  timer.unref?.();
+  server.once('close', () => clearInterval(timer));
+  return server;
+
+  async function collect() {
+    job = { type: 'collect', platform: null, startedAt: new Date(now()).toISOString() };
+    try {
+      return await runCollection();
+    } finally {
+      job = null;
+    }
+  }
+
+  function startLogin(platform) {
+    const startedAt = new Date(now()).toISOString();
+    job = { type: 'login', platform, startedAt };
+    logins.set(platform, { platform, status: 'running', startedAt, finishedAt: null, error: null });
+    void Promise.resolve().then(() => runLogin(platform)).then(() => {
+      logins.set(platform, { platform, status: 'success', startedAt, finishedAt: new Date(now()).toISOString(), error: null });
+    }).catch(() => {
+      logins.set(platform, { platform, status: 'error', startedAt, finishedAt: new Date(now()).toISOString(), error: 'Login failed' });
+    }).finally(() => {
+      job = null;
+    });
+  }
 }
 
 export async function startServer({
@@ -80,13 +122,16 @@ export async function startServer({
   host = config.host,
   port = config.port,
   runCollection,
+  runLogin = loginToPlatform,
+  collectionIntervalMs = DEFAULT_COLLECTION_INTERVAL_MS,
+  now = Date.now,
   coverStore,
   webRoot,
   write = line => console.log(line)
 } = {}) {
   initSchema(db);
   const collect = runCollection ?? (() => collectWithBrowser(db));
-  const server = createServer({ db, runCollection: collect, coverStore, webRoot });
+  const server = createServer({ db, runCollection: collect, runLogin, collectionIntervalMs, now, coverStore, webRoot });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, resolve);
@@ -105,7 +150,7 @@ async function collectWithBrowser(db) {
   }
 }
 
-function getHealth(db) {
+function getHealth(db, { job, nextCollectionAt, logins }) {
   const rows = db.prepare(`
     SELECT platform, status, finished_at, partial, error
     FROM collector_runs runs
@@ -114,6 +159,9 @@ function getHealth(db) {
   `).all();
   return {
     ok: true,
+    job,
+    nextCollectionAt,
+    logins: [...logins.values()].sort((left, right) => left.platform.localeCompare(right.platform)),
     lastCollectedAt: rows.map(row => row.finished_at).filter(Boolean).sort().at(-1) ?? null,
     platforms: rows.map(row => ({
       platform: row.platform,
