@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan. Review tasks at checkpoints and stop on failed verification.
 
-**Goal:** Build `maitian-insight`, a local-first open-source dashboard that collects the owner’s Douyin, Xiaohongshu, and WeChat Channels creator data and displays it with a polished visual design.
+**Goal:** Build `shanzhu-insight`, a local-first open-source dashboard that collects the owner’s Douyin, Xiaohongshu, and WeChat Channels creator data and displays it with a polished visual design.
 
 **Architecture:** One Node.js 22 process drives a persistent local Chrome profile, normalizes three platform responses, and stores daily snapshots in SQLite. A local-only HTTP server reads SQLite and serves two vanilla web pages. Windows Task Scheduler runs the same `collect` command once per day. A minimal MV3 bridge is conditional and exists only if live Channels verification proves Playwright cannot access the required response.
 

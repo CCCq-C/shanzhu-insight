@@ -1,8 +1,8 @@
-# 麦田洞察（Maitian Insight）
+# 山竹洞察（ShanZhu Insight）
 
 本地优先的创作者数据看板。定时采集自己的抖音、小红书、视频号创作者数据，再用两页高级看板展示。
 
-![麦田洞察看板](docs/images/dashboard.png)
+![山竹洞察看板](docs/images/dashboard.png)
 
 ## 功能
 
@@ -24,8 +24,8 @@
 ## 安装
 
 ```powershell
-git clone <你的仓库地址> maitian-insight
-cd maitian-insight
+git clone <你的仓库地址> shanzhu-insight
+cd shanzhu-insight
 npm ci
 ```
 
@@ -75,7 +75,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-task.ps1 -At 18:30
 powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-task.ps1
 ```
 
-任务名固定为 `MaitianInsightDailyCollection`。任务使用当前登录用户的交互会话，因此 Chrome 可能短暂显示。
+任务名固定为 `ShanZhuInsightDailyCollection`。任务使用当前登录用户的交互会话，因此 Chrome 可能短暂显示。
 
 ## 数据获取方式
 
@@ -125,7 +125,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-task.ps1
 
 1. 运行 `node src/cli.mjs doctor`。出现 `needs_login` 时重新执行 `login`。
 2. 运行一次 `node src/cli.mjs collect`，查看被清洗过的状态与警告。
-3. 在任务计划程序中检查 `MaitianInsightDailyCollection` 的“上次运行结果”。
+3. 在任务计划程序中检查 `ShanZhuInsightDailyCollection` 的“上次运行结果”。
 4. 删除失效登录态前先备份 `data/`；不要直接删除数据库。
 
 ## 开发

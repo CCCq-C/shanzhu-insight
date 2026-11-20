@@ -39,6 +39,8 @@ test('dashboard HTML contains the approved information architecture', () => {
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
+  assert.match(html, /山竹洞察/);
+  assert.doesNotMatch(html, /麦田洞察/);
   assert.match(html, /<main/);
   assert.match(html, /\/vendor\/echarts\.min\.js/);
   assert.doesNotMatch(html, /<(?:script|link)[^>]+(?:src|href)=["']https?:/i);

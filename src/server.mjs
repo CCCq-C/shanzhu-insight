@@ -92,7 +92,7 @@ export async function startServer({
     server.listen(port, host, resolve);
   });
   const address = server.address();
-  write(`maitian-insight: http://${host}:${address.port}`);
+  write(`shanzhu-insight: http://${host}:${address.port}`);
   return server;
 }
 

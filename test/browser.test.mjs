@@ -7,7 +7,7 @@ import test from 'node:test';
 import { findChromeExecutable, openPersistentBrowser } from '../src/browser.mjs';
 
 test('findChromeExecutable selects the first existing Windows Chrome path', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maitian-chrome-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shanzhu-chrome-'));
   const installed = path.join(root, 'chrome.exe');
   fs.writeFileSync(installed, 'test');
 
@@ -24,7 +24,7 @@ test('findChromeExecutable explains when Chrome is missing', () => {
 });
 
 test('openPersistentBrowser uses the selected profile and closes explicitly', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maitian-browser-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shanzhu-browser-'));
   const chromePath = path.join(root, 'chrome.exe');
   const profileDir = path.join(root, 'profile');
   fs.writeFileSync(chromePath, 'test');

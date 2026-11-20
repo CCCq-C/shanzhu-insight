@@ -9,8 +9,8 @@ test('scheduled task scripts share one stable task name', () => {
   const install = fs.readFileSync(installPath, 'utf8');
   const uninstall = fs.readFileSync(uninstallPath, 'utf8');
 
-  assert.match(install, /MaitianInsightDailyCollection/);
-  assert.match(uninstall, /MaitianInsightDailyCollection/);
+  assert.match(install, /ShanZhuInsightDailyCollection/);
+  assert.match(uninstall, /ShanZhuInsightDailyCollection/);
 });
 
 test('installer uses an absolute quoted CLI path and daily interactive trigger', () => {

@@ -5,7 +5,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$TaskName = 'MaitianInsightDailyCollection'
+$TaskName = 'ShanZhuInsightDailyCollection'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $entrypoint = [IO.Path]::GetFullPath((Join-Path $projectRoot 'src\cli.mjs'))
 $nodePath = Get-Command node -CommandType Application -ErrorAction Stop |
@@ -29,7 +29,7 @@ $task = New-ScheduledTask `
   -Trigger $trigger `
   -Principal $principal `
   -Settings $settings `
-  -Description 'Collect local creator metrics for Maitian Insight.'
+  -Description 'Collect local creator metrics for ShanZhu Insight.'
 
 Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force | Out-Null
 Write-Host "Installed $TaskName. Daily trigger: $At."

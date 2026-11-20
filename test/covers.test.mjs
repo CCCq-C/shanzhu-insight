@@ -131,7 +131,7 @@ test('cover store revalidates every redirect target', async t => {
 });
 
 function tempDirectory(t) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'maitian-cover-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'shanzhu-cover-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }

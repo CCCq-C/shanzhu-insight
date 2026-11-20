@@ -1,7 +1,7 @@
 # 自媒体数据看板设计
 
 日期：2026-11-20  
-暂定项目名：`maitian-insight`
+项目名：`shanzhu-insight`（山竹洞察）
 
 ## 1. 意图
 
@@ -96,7 +96,7 @@
 ## 8. 项目结构
 
 ```text
-maitian-insight/
+shanzhu-insight/
   src/
     cli.mjs
     browser.mjs
