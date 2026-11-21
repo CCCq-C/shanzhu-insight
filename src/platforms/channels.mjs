@@ -1,5 +1,4 @@
 const HOME_URL = 'https://channels.weixin.qq.com/platform';
-const POSTS_URL = 'https://channels.weixin.qq.com/platform/statistic/post';
 const FANS_URL = 'https://channels.weixin.qq.com/platform/statistic/follower';
 const POST_LIST_MARKER = '/statistic/post_list';
 const FANS_TREND_MARKER = '/statistic/fans_trend';
@@ -100,8 +99,11 @@ export async function collectChannels({ context, since, limit = 100, now = new D
         { timeout: 30000 }
       ),
       (async () => {
-        await page.goto(POSTS_URL, { waitUntil: 'domcontentloaded' });
-        await page.getByText('单篇视频', { exact: true }).click();
+        await page.goto(HOME_URL, { waitUntil: 'domcontentloaded' });
+        await page.locator('a').filter({ hasText: '视频数据' }).first().evaluate(link => link.click());
+        const singlePostTab = page.getByText('单篇视频', { exact: true });
+        await singlePostTab.waitFor({ state: 'attached', timeout: 10000 });
+        await singlePostTab.click();
       })()
     ]);
     const identity = await readIdentity(page);

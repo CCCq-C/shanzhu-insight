@@ -124,7 +124,7 @@ test('collectChannels captures structured responses and paginates with the origi
   assert.equal(postBodies[1].currentPage, 2);
   assert.equal(postBodies[0]._log_finder_id, 'example@finder');
   assert.equal(result.accountSnapshot.followers, 47);
-  assert.deepEqual(clickedLabels, ['单篇视频']);
+  assert.deepEqual(clickedLabels, ['视频数据', '单篇视频']);
 });
 
 test('collectChannels stops at 100 items and reports partial data', async () => {
@@ -159,7 +159,18 @@ test('collectChannels consumes the pending response wait when tab activation fai
   const page = {
     waitForResponse: () => response,
     goto: async () => {},
-    getByText: () => ({ click: async () => { throw new Error('tab activation failed'); } }),
+    locator: () => {
+      const chain = {
+        filter: () => chain,
+        first: () => chain,
+        evaluate: async () => {}
+      };
+      return chain;
+    },
+    getByText: () => ({
+      waitFor: async () => {},
+      click: async () => { throw new Error('tab activation failed'); }
+    }),
     close: async () => { rejectResponse(new Error('response wait stopped')); }
   };
 
@@ -258,7 +269,18 @@ function fakeContext({ firstPage = postFixture, secondPage } = {}) {
     },
     goto: async () => {},
     url: () => 'https://channels.weixin.qq.com/platform/statistic/post',
-    getByText: label => ({ click: async () => { clickedLabels.push(label); } }),
+    locator: () => {
+      const chain = {
+        filter: () => chain,
+        first: () => chain,
+        evaluate: async () => { clickedLabels.push('视频数据'); }
+      };
+      return chain;
+    },
+    getByText: label => ({
+      waitFor: async () => {},
+      click: async () => { clickedLabels.push(label); }
+    }),
     evaluate: async (_function, argument) => {
       if (argument == null) {
         return { finderId: 'example@finder', displayName: '示例视频号', avatarUrl: null };
