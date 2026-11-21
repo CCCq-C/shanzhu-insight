@@ -1,28 +1,62 @@
-# 山竹洞察（ShanZhu Insight）
+<div align="center">
 
-本地优先的创作者数据看板。定时采集自己的抖音、小红书、视频号创作者数据，再用两页高级看板展示。
+# 山竹洞察
 
-![山竹洞察看板](docs/images/dashboard.png)
+**一个本地优先的自媒体数据看板**
 
-## 功能
+定时采集自己的抖音、小红书和视频号创作数据，在一个界面中对比粉丝增长、内容表现和深度指标。
 
-- 三个平台：抖音、小红书、视频号。
-- 两个页面：总览大屏与内容档案。
-- 本地 SQLite：账号、作品、每日快照、采集记录。
-- 本地 ECharts：全平台粉丝资产趋势、单平台账号趋势与跨平台内容对比。
-- 后台采集：看板运行时每 15 分钟自动采集，网页每 30 秒刷新状态。
-- 登录管理：Cookie 失效会明确提示，也可主动更新三个平台的 Cookie。
+[![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
+![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.5-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=flat-square&logo=windows11&logoColor=white)
+![Local First](https://img.shields.io/badge/data-local--first-7C3AED?style=flat-square)
 
-不包含自动发布、竞品监控、云端同步、AI 分析和报警系统。
+[3 分钟快速开始](#-快速开始) · [功能概览](#-功能概览) · [数据与隐私](#-数据与隐私) · [已知限制](#-已知限制)
 
-## 环境要求
+</div>
 
-- Windows 10 或 Windows 11。
-- Node.js 22.5 或更高版本。
-- 已安装 Google Chrome。
-- 三个平台自己的创作者账号。
+<p align="center">
+  <img src="docs/images/dashboard.png" alt="山竹洞察数据看板" width="100%" />
+</p>
 
-## 安装
+## 为什么做山竹洞察
+
+平台后台各自独立，同一条内容的播放、互动和粉丝转化很难横向比较。山竹洞察只解决一件事：
+
+> 把三个创作者后台的数据放到一张好看、易读、可长期积累的本地看板里。
+
+它不做自动发布，不托管账号，不上传 Cookie，也不依赖云端数据库。
+
+## ✨ 功能概览
+
+- **跨平台总览**：粉丝资产、近 30 天趋势、最新内容和跨平台播放对比。
+- **内容档案**：将三个平台的同一条内容合并展示，无需逐个切换平台。
+- **深度指标**：对比平均观看时长、完播率、跳出率、互动率和粉丝转化。
+- **并行采集**：抖音、小红书、视频号同时采集，单平台失败不影响其他平台。
+- **本地优先**：SQLite、Chrome 登录态和封面缓存全部保存在本机 `data/` 目录。
+- **自动更新**：看板运行时每 15 分钟采集一次，也可手动立即刷新。
+
+## 📊 支持的平台与数据
+
+| 平台 | 账号数据 | 内容数据 | 深度数据 |
+| --- | --- | --- | --- |
+| 抖音 | 粉丝、关注、获赞、粉丝趋势 | 播放、赞、评、藏、分享 | 平均观看、5 秒完播、2 秒跳出、粉丝转化 |
+| 小红书 | 粉丝、粉丝趋势 | 曝光、观看、赞、评、藏、分享 | 封面点击率、平均观看、涨粉 |
+| 视频号 | 粉丝、粉丝趋势 | 播放、赞、评、转发 | 平均观看、完播率、涨粉 |
+
+> 平台没有提供的指标会明确显示为“平台未提供”，不会使用 `0` 冒充。
+
+## 🚀 快速开始
+
+### 1. 环境要求
+
+- Windows 10 或 Windows 11
+- Node.js 22.5 或更高版本
+- Google Chrome
+- Git
+- 自己的抖音、小红书和视频号创作者账号
+
+### 2. 安装
 
 ```powershell
 git clone https://github.com/CCCq-C/shanzhu-insight.git
@@ -30,114 +64,135 @@ cd shanzhu-insight
 npm ci
 ```
 
-启动看板：
+### 3. 启动看板
 
 ```powershell
 node src/cli.mjs serve
 ```
 
-打开 [http://127.0.0.1:8789](http://127.0.0.1:8789)，在“账号健康度”卡片中分别登录抖音、小红书和视频号。只有主动登录时才显示 Chrome；采集始终在后台运行。
+打开 [http://127.0.0.1:8789](http://127.0.0.1:8789)，在“账号健康度”区域分别登录三个平台。完成登录后，点击“立即采集”生成第一份数据。
 
-## 四个命令
+- 只有需要登录时才显示 Chrome 窗口。
+- 日常采集使用无头 Chrome，不占用前台。
+- 第一次采集后，数据会在看板中自动刷新。
+
+## 🧭 工作原理
+
+```mermaid
+flowchart LR
+  A[创作者后台] --> B[Playwright 持久化 Chrome]
+  B --> C[结构化响应采集器]
+  C --> D[(本地 SQLite)]
+  D --> E[127.0.0.1 数据 API]
+  E --> F[ECharts 本地看板]
+```
+
+项目使用创作者后台已经返回的结构化数据，不依赖页面文字排列。三个平台的网络请求并行执行，数据使用独立 SQLite 事务保存。
+
+## ⌨️ 命令行
 
 ```powershell
-# 兼容入口：打开三个登录页并保存本地登录态
+# 打开三个平台的登录页
 node src/cli.mjs login
 
-# 检查三个平台的登录状态
+# 检查登录状态
 node src/cli.mjs doctor
 
 # 立即采集一次
 node src/cli.mjs collect
 
-# 启动本地看板
+# 启动看板与 15 分钟定时采集
 node src/cli.mjs serve
 ```
 
-看板只监听 [http://127.0.0.1:8789](http://127.0.0.1:8789)，不会默认暴露到局域网或互联网。
+### Windows 每日兜底任务
 
-## 自动采集
-
-`serve` 运行期间，每 15 分钟自动采集一次。手动点击“立即采集”不会弹出 Chrome；网页内会显示当前状态。
-
-如果不常驻运行看板，也可安装每天一次的兜底任务。不要同时把它当作主要采集方式。
-
-默认每天 09:00 采集：
+如果不常驻运行看板，可安装每天一次的计划任务：
 
 ```powershell
+# 默认每天 09:00
 powershell -ExecutionPolicy Bypass -File .\scripts\install-task.ps1
-```
 
-指定时间：
-
-```powershell
+# 指定时间
 powershell -ExecutionPolicy Bypass -File .\scripts\install-task.ps1 -At 18:30
-```
 
-移除定时任务：
-
-```powershell
+# 移除计划任务
 powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-task.ps1
 ```
 
-任务名固定为 `ShanZhuInsightDailyCollection`。采集使用无头 Chrome，不显示浏览器窗口。
+任务名固定为 `ShanZhuInsightDailyCollection`。
 
-## 数据获取方式
+## 🗂️ 数据与隐私
 
-项目读取创作者后台页面已经返回的结构化响应，不抓页面上的文字顺序：
+所有运行数据都保存在未跟踪的 `data/` 目录：
 
-| 平台 | 数据入口 | 主要数据 |
-| --- | --- | --- |
-| 抖音 | 抖音创作者中心结构化接口 | 粉丝、作品、播放、赞、评、藏、分享 |
-| 小红书 | 小红书创作服务平台结构化接口 | 粉丝、笔记、浏览、赞、评、藏、分享 |
-| 视频号 | 视频号助手“单篇视频”和粉丝趋势响应 | 粉丝、作品、播放、赞、评、转发 |
+| 路径 | 内容 |
+| --- | --- |
+| `data/insight.db` | SQLite 数据库 |
+| `data/browser-profile/` | Chrome 登录态，包含敏感 Cookie |
+| `data/covers/` | 封面缓存 |
 
-内部接口可能变化。采集器最多保留 100 条近期作品。平台拒绝后续翻页时，已有首屏数据仍会保存，并在看板标记为“数据不完整”。
+- 项目不会将 Cookie、数据库或原始接口响应上传给项目作者。
+- 本地服务只监听 `127.0.0.1:8789`，请勿映射到局域网或公网。
+- 备份前请停止看板，然后复制完整 `data/` 目录。
+- 请勿将 `data/`、截图或浏览器配置打包到 GitHub Release。
 
-## 本地数据与备份
+### 切换账号
 
-所有运行数据都在未跟踪的 `data/` 目录：
+当前每个数据目录只支持每个平台一个账号。切换同平台账号前，请先停止山竹洞察并整体备份 `data/` 目录。不要在同一数据库中交替使用多个账号。
 
-- `data/insight.db`：SQLite 数据库。
-- `data/browser-profile/`：Chrome 登录态，包含敏感 Cookie。
-- `data/covers/`：封面缓存。
+## ⚠️ 已知限制
 
-备份前先停止看板与采集，再复制整个 `data/` 目录。恢复时放回项目根目录即可。
+- 项目当前只支持 Windows 和本机 Google Chrome。
+- 三个平台没有为这组数据提供统一、稳定的公开 API；平台改版可能导致采集器暂时失效。
+- 默认采集最近 90 天、每个平台最多 100 条作品。
+- 登录过期、滑块验证或平台风控会使当次采集失败。
+- 项目不支持自动发布、云端同步、多用户、多账号或竞品监控。
 
-项目不保存接口原始响应。数据库只保存看板需要的账号公开指标、作品标识、标题、链接、封面地址和每日指标。
-
-## 隐私与安全
-
-- 不要提交、共享或同步 `data/browser-profile/`。
-- 不要把 `8789` 端口直接暴露到互联网。
-- 不要把个人 `data/` 目录打包进 GitHub Release。
-- 只采集自己已登录账号的创作者后台数据。
-
-## 已知限制
-
-- 三个平台都没有为这组账号分析指标提供统一、稳定的公开 API。
-- 小红书可能对后续分页返回 `HTTP 406`；此时只保存已取得页面并标记部分数据。
-- 视频号需要页面成功切换到“单篇视频”后才会发出作品接口请求。
-- 登录过期、滑块验证、平台改版会让当次采集显示“需要登录”或“采集失败”。
-
-## 为什么现在没有浏览器插件
-
-当前 Playwright 会话能直接捕获三个后台的结构化响应。浏览器插件不会增加数据完整性，反而增加安装、权限和维护成本。
-
-只有平台以后把响应隔离到 Playwright 无法访问的上下文时，才启用 MV3 插件方案。插件也只申请对应创作者后台域名和最小网络权限。
-
-## 排障
-
-1. 看板显示“Cookie 已失效”时，点击对应平台的“重新登录”。
-2. 运行一次 `node src/cli.mjs collect`，查看被清洗过的状态与警告。
-3. 看板未自动更新时，确认 `node src/cli.mjs serve` 仍在运行。
-4. 删除失效登录态前先备份 `data/`；不要直接删除数据库。
-
-## 开发
+## 🧪 开发与验证
 
 ```powershell
 npm test
 npm run check
 ```
 
-许可证：MIT。第三方组件与行为参考见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+测试覆盖采集解析、分页、数据库迁移、账号状态、封面安全、本地 API、后台任务和看板交互。
+
+### 项目结构
+
+```text
+├── src/
+│   ├── platforms/     # 三个平台的采集器
+│   ├── web/           # 看板页面
+│   ├── db.mjs         # SQLite 数据层
+│   ├── server.mjs     # 本地 HTTP 服务
+│   └── cli.mjs        # 命令行入口
+├── scripts/            # Windows 计划任务
+├── test/               # 自动化测试与示例数据
+└── data/               # 本地运行数据，Git 已忽略
+```
+
+## 🤝 贡献
+
+欢迎提交 [Issue](https://github.com/CCCq-C/shanzhu-insight/issues) 和 [Pull Request](https://github.com/CCCq-C/shanzhu-insight/pulls)。
+
+1. Fork 仓库并创建功能分支。
+2. 保持改动小而可验证。
+3. 提交前运行 `npm test` 和 `npm run check`。
+4. 不要提交 Cookie、真实接口响应、账号 ID 或未脱敏截图。
+
+## 📜 声明
+
+本项目与抖音、小红书、微信视频号及其关联公司无官方关联。请仅采集自己有权访问的账号数据，并遵守对应平台的服务条款和所在地法律。
+
+## 📄 许可证
+
+项目使用 [MIT License](LICENSE)。第三方依赖与设计参考见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 💬 联系作者
+
+<p align="center">
+  <img src="docs/images/wechat-business-qr.png" alt="微信商务合作二维码" width="180" />
+  <br />
+  <sub>使用交流 · 商务合作</sub>
+</p>
