@@ -44,13 +44,20 @@ function renderHeader(overview, health) {
 function renderAuthAlerts(health) {
   const alert = document.querySelector('#auth-alerts');
   const loginByPlatform = new Map((health.logins || []).map(record => [record.platform, record]));
-  const expired = (health.platforms || []).filter(record => (
+  const problems = (health.platforms || []).filter(record => (
+    ['partial', 'error'].includes(record.status) ||
     record.status === 'needs_login' && platformPresentation(record, loginByPlatform.get(record.platform)).label === '需要登录'
   ));
-  alert.hidden = expired.length === 0;
-  alert.innerHTML = expired.map(record => {
+  alert.hidden = problems.length === 0;
+  alert.innerHTML = problems.map(record => {
     const platform = PLATFORMS[record.platform] || { name: record.platform };
-    return `<div class="auth-alert-item"><div><strong>${platform.name} Cookie 已失效</strong><span>重新登录后，后台采集会继续使用新的 Cookie。</span></div><button class="secondary-button" type="button" data-login-platform="${record.platform}">重新登录</button></div>`;
+    if (record.status === 'needs_login') {
+      return `<div class="auth-alert-item danger"><div><strong>${escapeHtml(platform.name)} Cookie 已失效</strong><span>重新登录后，后台采集会继续使用新的 Cookie。</span></div><button class="secondary-button" type="button" data-login-platform="${escapeHtml(record.platform)}">重新登录</button></div>`;
+    }
+    const failed = record.status === 'error';
+    const title = `${platform.name} 数据采集${failed ? '失败' : '不完整'}`;
+    const detail = record.error ? `${record.error}。` : '';
+    return `<div class="auth-alert-item ${failed ? 'danger' : 'warning'}"><div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}已保留历史数据，15 分钟后自动重试。</span></div></div>`;
   }).join('');
 }
 

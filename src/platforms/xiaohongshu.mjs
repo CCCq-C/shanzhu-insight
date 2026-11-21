@@ -1,5 +1,6 @@
 const HOME_URL = 'https://creator.xiaohongshu.com/new/home';
 const NOTES_URL = 'https://creator.xiaohongshu.com/new/note-manager';
+const STATS_URL = 'https://creator.xiaohongshu.com/statistics/data-analysis';
 const POSTED_PATH = '/api/galaxy/v2/creator/note/user/posted';
 const USER_PATH = '/api/galaxy/user/info';
 const FANS_PATH = '/api/galaxy/creator/data/fans/overall_new';
@@ -65,6 +66,45 @@ export function parseXiaohongshuPosted(payload, analysisPayload = null) {
   };
 }
 
+export function parseXiaohongshuAnalysis(payload) {
+  assertSuccessful(payload);
+  const data = payload?.data ?? {};
+  const rows = Array.isArray(data.note_infos) ? data.note_infos : [];
+  const posts = [];
+  const metrics = [];
+
+  for (const row of rows) {
+    const postId = identifier(row?.id ?? row?.note_id);
+    const publishedAt = epochToIso(row?.post_time);
+    if (!postId || !publishedAt) continue;
+    posts.push({
+      postId,
+      title: String(row?.title ?? '').trim() || '未命名笔记',
+      url: `https://www.xiaohongshu.com/explore/${postId}`,
+      coverUrl: firstImageUrl(row?.cover_url),
+      publishedAt
+    });
+    metrics.push({
+      postId,
+      views: metric(row?.read_count),
+      likes: metric(row?.like_count),
+      comments: metric(row?.comment_count),
+      favorites: metric(row?.fav_count),
+      shares: metric(row?.share_count),
+      durationSeconds: null,
+      averageWatchSeconds: numberMetric(row?.view_time_avg),
+      completionRate: null,
+      fiveSecondCompletionRate: null,
+      twoSecondBounceRate: null,
+      impressions: metric(row?.imp_count),
+      coverClickRate: numberMetric(row?.coverClickRate),
+      followersGained: metric(row?.increase_fans_count)
+    });
+  }
+
+  return { posts, metrics, reportedTotal: metric(data.total) ?? posts.length };
+}
+
 export function parseXiaohongshuFans(payloads) {
   const [userPayload, fansPayload] = Array.isArray(payloads) ? payloads : [];
   assertSuccessful(userPayload);
@@ -96,6 +136,15 @@ export async function collectXiaohongshu({ context, since, limit = 100, now = ne
   const page = await context.newPage();
   const warnings = [];
   try {
+    let analysisPayload = null;
+    try {
+      const analysis = await captureAnalysis(page, limit);
+      analysisPayload = analysis.payload;
+      if (analysis.partial) warnings.push('内容深度指标未完整获取');
+    } catch {
+      warnings.push('内容深度指标暂不可用');
+    }
+
     const responsePromise = page.waitForResponse(
       response => response.url().includes(POSTED_PATH),
       { timeout: 30000 }
@@ -103,16 +152,9 @@ export async function collectXiaohongshu({ context, since, limit = 100, now = ne
     await page.goto(NOTES_URL, { waitUntil: 'domcontentloaded' });
     const firstResponse = await responsePromise;
     const firstPayload = await firstResponse.json();
-    const [userPayload, fansPayload, analysisPayload] = await Promise.all([
+    const [userPayload, fansPayload] = await Promise.all([
       fetchJson(page, USER_PATH),
-      fetchJson(page, FANS_PATH),
-      fetchJson(page, analysisUrl(since, now)).then(payload => {
-        assertSuccessful(payload);
-        return payload;
-      }).catch(() => {
-        warnings.push('内容深度指标暂不可用');
-        return null;
-      })
+      fetchJson(page, FANS_PATH)
     ]);
     const account = parseXiaohongshuFans([userPayload, fansPayload]);
 
@@ -124,6 +166,11 @@ export async function collectXiaohongshu({ context, since, limit = 100, now = ne
     let nextPage = parsed.nextPage;
     let cursorStuck = false;
     addPage(parsed, allPosts, allMetrics, limit);
+    if (analysisPayload) {
+      const analysis = parseXiaohongshuAnalysis(analysisPayload);
+      addPage(analysis, allPosts, allMetrics, limit);
+      reportedTotal = Math.max(reportedTotal, analysis.reportedTotal, allPosts.size);
+    }
 
     while (hasMore && allPosts.size < limit) {
       const nextUrl = new URL(firstResponse.url());
@@ -159,12 +206,58 @@ export async function collectXiaohongshu({ context, since, limit = 100, now = ne
       posts,
       metrics,
       reportedTotal: Math.max(reportedTotal, posts.length),
-      partial: cursorStuck || hasMore,
+      partial: cursorStuck || hasMore || warnings.length > 0,
       warnings
     };
   } finally {
     await page.close();
   }
+}
+
+async function captureAnalysis(page, limit) {
+  const firstResponsePromise = page.waitForResponse(
+    response => response.url().includes(ANALYSIS_PATH) && responsePage(response.url()) === 1,
+    { timeout: 30000 }
+  );
+  await page.goto(STATS_URL, { waitUntil: 'domcontentloaded' });
+  const firstResponse = await firstResponsePromise;
+  const firstPayload = await firstResponse.json();
+  assertSuccessful(firstPayload);
+
+  const firstUrl = new URL(firstResponse.url());
+  const pageSize = Number(firstUrl.searchParams.get('page_size')) || 10;
+  const total = metric(firstPayload?.data?.total) ?? firstPayload?.data?.note_infos?.length ?? 0;
+  const lastPage = Math.min(Math.ceil(total / pageSize), Math.ceil(limit / pageSize));
+  const noteInfos = [...(firstPayload?.data?.note_infos ?? [])];
+  let partial = false;
+
+  for (let pageNumber = 2; pageNumber <= lastPage; pageNumber += 1) {
+    try {
+      const responsePromise = page.waitForResponse(
+        response => response.url().includes(ANALYSIS_PATH) && responsePage(response.url()) === pageNumber,
+        { timeout: 30000 }
+      );
+      await page.locator('span.d-pagination-page-content')
+        .filter({ hasText: new RegExp(`^${pageNumber}$`) })
+        .first()
+        .click();
+      const response = await responsePromise;
+      const payload = await response.json();
+      assertSuccessful(payload);
+      noteInfos.push(...(payload?.data?.note_infos ?? []));
+    } catch {
+      partial = true;
+      break;
+    }
+  }
+
+  return {
+    payload: {
+      ...firstPayload,
+      data: { ...firstPayload.data, note_infos: noteInfos, total }
+    },
+    partial
+  };
 }
 
 async function checkXiaohongshuLogin({ context }) {
@@ -229,14 +322,8 @@ function epochDate(value) {
   return SHANGHAI_DATE.format(new Date(number > 10_000_000_000 ? number : number * 1000));
 }
 
-function analysisUrl(since, now) {
-  const url = new URL(ANALYSIS_PATH, HOME_URL);
-  url.searchParams.set('post_begin_time', String(new Date(since).getTime()));
-  url.searchParams.set('post_end_time', String(new Date(now).getTime()));
-  url.searchParams.set('type', '0');
-  url.searchParams.set('page_size', '100');
-  url.searchParams.set('page_num', '1');
-  return url.href;
+function responsePage(url) {
+  return Number(new URL(url).searchParams.get('page_num'));
 }
 
 function firstImageUrl(image) {

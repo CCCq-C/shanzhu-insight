@@ -82,7 +82,11 @@ test('collectAll isolates platform errors and keeps later collectors running', a
       {
         platform: 'channels',
         checkLogin: async () => ({ ok: true }),
-        collect: async () => collection('channels', { partial: true, reportedTotal: 8 })
+        collect: async () => collection('channels', {
+          partial: true,
+          reportedTotal: 8,
+          warnings: ['作品列表未完整获取']
+        })
       }
     ],
     now: new Date('2026-11-20T10:00:00+08:00'),
@@ -94,6 +98,7 @@ test('collectAll isolates platform errors and keeps later collectors running', a
   assert.equal(runs[0].status, 'error');
   assert.equal(runs[0].error.includes('abc123'), false);
   assert.equal(runs[1].status, 'partial');
+  assert.equal(runs[1].error, '作品列表未完整获取');
 });
 
 test('collectAll records needs_login without replacing existing data', async () => {

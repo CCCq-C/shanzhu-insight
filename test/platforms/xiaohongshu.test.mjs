@@ -129,6 +129,55 @@ test('collectXiaohongshu captures first response and follows the returned page c
   assert.equal(result.metrics.find(metric => metric.postId === 'xhs-003').averageWatchSeconds, 10);
 });
 
+test('collectXiaohongshu captures signed analysis pagination without replaying the protected URL', async () => {
+  const firstPage = structuredClone(postedFixture);
+  firstPage.data.page = -1;
+  const analysisPageOne = structuredClone(analysisFixture);
+  analysisPageOne.data.total = 3;
+  analysisPageOne.data.note_infos.push({
+    id: 'xhs-002',
+    title: '第二篇笔记',
+    post_time: 1794902400,
+    cover_url: 'https://example.test/xhs/cover-002.jpg',
+    read_count: 300,
+    view_time_avg: 8
+  });
+  const analysisPageTwo = {
+    code: 0,
+    success: true,
+    data: {
+      total: 3,
+      note_infos: [{
+        id: 'xhs-003',
+        title: '第三篇笔记',
+        post_time: 1794816000,
+        cover_url: 'https://example.test/xhs/cover-003.jpg',
+        read_count: 200,
+        view_time_avg: 10,
+        increase_fans_count: 2
+      }]
+    }
+  };
+  const { context, requestedUrls } = fakeContext({
+    firstPage,
+    analysisPages: [analysisPageOne, analysisPageTwo],
+    analysisReplayError: new Error('HTTP 406')
+  });
+
+  const result = await collectXiaohongshu({
+    context,
+    since: new Date('2026-11-01T00:00:00.000Z'),
+    limit: 100,
+    now: new Date('2026-11-20T00:00:00.000Z')
+  });
+
+  assert.equal(result.posts.length, 3);
+  assert.equal(result.partial, false);
+  assert.equal(result.warnings.includes('内容深度指标暂不可用'), false);
+  assert.equal(result.metrics.find(metric => metric.postId === 'xhs-003').averageWatchSeconds, 10);
+  assert.equal(requestedUrls.some(url => url.includes('/note/analyze/list')), false);
+});
+
 test('collectXiaohongshu stops at 100 items and marks remaining pages partial', async () => {
   const many = structuredClone(postedFixture);
   many.data.page = 3;
@@ -198,23 +247,46 @@ test('xiaohongshuCollector reports login redirects', async () => {
   }), { ok: false, reason: 'Login required' });
 });
 
-function fakeContext({ firstPage = postedFixture, secondPage, paginationError, analysisError, analysisPayload = analysisFixture } = {}) {
+function fakeContext({
+  firstPage = postedFixture,
+  secondPage,
+  paginationError,
+  analysisError,
+  analysisPayload = analysisFixture,
+  analysisPages = [analysisPayload],
+  analysisReplayError
+} = {}) {
   const requestedUrls = [];
   const firstUrl = 'https://creator.xiaohongshu.com/api/galaxy/v2/creator/note/user/posted?tab=0&page=0';
-  const response = {
+  const postedResponse = {
     url: () => firstUrl,
     json: async () => structuredClone(firstPage)
   };
+  const responses = analysisPages.map((payload, index) => ({
+    url: () => `https://creator.xiaohongshu.com/api/galaxy/creator/datacenter/note/analyze/list?post_begin_time=1&post_end_time=2&type=0&page_size=2&page_num=${index + 1}`,
+    json: async () => structuredClone(payload)
+  }));
+  responses.push(postedResponse);
+  const consumed = new Set();
   const page = {
     waitForResponse: async predicate => {
-      assert.equal(predicate(response), true);
+      const analysisResponse = responses.find(response => response.url().includes('/note/analyze/list') && predicate(response));
+      if (analysisResponse && analysisError) throw analysisError;
+      const response = responses.find(candidate => !consumed.has(candidate) && predicate(candidate));
+      assert.ok(response, 'Expected a matching platform response');
+      consumed.add(response);
       return response;
     },
     goto: async () => {},
+    locator: () => {
+      const chain = { filter: () => chain, first: () => chain, click: async () => {} };
+      return chain;
+    },
     evaluate: async (_function, url) => {
       requestedUrls.push(url);
       if (url.includes('/api/galaxy/user/info')) return structuredClone(fansFixture.userInfo);
       if (url.includes('/fans/overall_new')) return structuredClone(fansFixture.fans);
+      if (url.includes('/note/analyze/list') && analysisReplayError) throw analysisReplayError;
       if (url.includes('/note/analyze/list') && analysisError) throw analysisError;
       if (url.includes('/note/analyze/list')) return structuredClone(analysisPayload);
       if (url.includes('/note/user/posted') && paginationError) throw paginationError;

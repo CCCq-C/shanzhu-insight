@@ -117,6 +117,29 @@ test('expired cookies show an actionable platform login alert', async t => {
   await page.waitForFunction(() => /登录成功/.test(document.querySelector('#task-title')?.textContent || ''));
 });
 
+test('partial and failed collection states stay prominently visible', async t => {
+  const page = await dashboardPage(t, {
+    setupDb: db => {
+      db.prepare(`
+        INSERT INTO collector_runs (platform, started_at, finished_at, status, partial, error)
+        VALUES ('xiaohongshu', '2026-11-20T01:00:00.000Z', '2026-11-20T01:00:01.000Z', 'partial', 1, '内容深度指标暂不可用')
+      `).run();
+      db.prepare(`
+        INSERT INTO collector_runs (platform, started_at, finished_at, status, error)
+        VALUES ('douyin', '2026-11-20T01:00:00.000Z', '2026-11-20T01:00:01.000Z', 'error', 'Error: collection failed')
+      `).run();
+    }
+  });
+
+  const alert = page.locator('#auth-alerts');
+  await alert.waitFor();
+  const text = await alert.textContent();
+  assert.match(text, /小红书 数据采集不完整.*内容深度指标暂不可用.*15 分钟后自动重试/s);
+  assert.match(text, /抖音 数据采集失败.*15 分钟后自动重试/s);
+  assert.equal(await alert.locator('.auth-alert-item.warning').count(), 1);
+  assert.equal(await alert.locator('.auth-alert-item.danger').count(), 1);
+});
+
 test('content archive uses two-column magazine cards with visible platform metrics', async t => {
   const page = await contentPage(t);
   const desktop = await page.evaluate(() => {

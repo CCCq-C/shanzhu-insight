@@ -46,7 +46,7 @@ export async function collectAll({
           reportedTotal: result.reportedTotal ?? null,
           partial: Boolean(result.partial),
           warnings: result.warnings ?? [],
-          error: null
+          error: result.partial ? (result.warnings ?? []).join('；') || '数据未完整获取' : null
         };
       }
     } catch (error) {
