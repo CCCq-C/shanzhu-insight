@@ -189,14 +189,15 @@ async function checkChannelsLogin({ context }) {
 
 async function isChannelsLoggedIn(page) {
   if (/\/login(?:\.html)?(?:[/?#]|$)/i.test(page.url())) return false;
-  return page.evaluate(() => {
+  const state = await page.evaluate(() => {
     const finderId = String(localStorage.getItem('finder_username') ?? '').trim();
     const root = document.querySelector('wujie-app')?.shadowRoot ?? document;
     const text = root.body?.innerText ?? root.textContent ?? '';
-    const loginVisible = /扫码登录|登录视频号助手|请登录/.test(text);
-    const authenticatedShell = /首页/.test(text) && /内容管理|数据中心/.test(text);
-    return Boolean(finderId) && !loginVisible && authenticatedShell;
+    return { finderId, text };
   });
+  const loginVisible = /扫码登录|登录视频号助手|请登录/.test(state.text);
+  const accountVisible = /视频号ID[:：]/.test(state.text) && /关注者/.test(state.text);
+  return Boolean(state.finderId) && !loginVisible && accountVisible;
 }
 
 function readIdentity(page) {

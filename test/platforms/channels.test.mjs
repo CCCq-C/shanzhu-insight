@@ -186,16 +186,19 @@ test('channelsCollector detects login UI inside the Wujie shadow root', async ()
 test('channelsCollector does not report login before the authenticated shell loads', async () => {
   const page = {
     url: () => 'https://channels.weixin.qq.com/platform',
-    evaluate: async () => false
+    evaluate: async () => ({ finderId: 'example@finder', text: '' })
   };
 
   assert.equal(await channelsCollector.isLoggedIn(page), false);
 });
 
-test('channelsCollector reports login only after the authenticated shell loads', async () => {
+test('channelsCollector recognizes the authenticated account card', async () => {
   const page = {
     url: () => 'https://channels.weixin.qq.com/platform',
-    evaluate: async () => true
+    evaluate: async () => ({
+      finderId: 'example@finder',
+      text: '筷子老师AI说 视频号ID:sph74D3DJBWWT6T 视频 10 关注者 50'
+    })
   };
 
   assert.equal(await channelsCollector.isLoggedIn(page), true);
@@ -213,7 +216,7 @@ test('channelsCollector trusts a rejected auth response over stale page state', 
     },
     goto: async () => {},
     url: () => 'https://channels.weixin.qq.com/platform',
-    evaluate: async () => false,
+    evaluate: async () => ({ finderId: 'example@finder', text: '' }),
     close: async () => {}
   };
 
