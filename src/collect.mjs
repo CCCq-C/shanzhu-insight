@@ -75,6 +75,9 @@ export async function collectAll({
 }
 
 function sanitizeError(error) {
+  if (error instanceof Error && error.name === 'AccountMismatchError') {
+    return '检测到不同账号，请更换独立 data 目录';
+  }
   const name = error instanceof Error ? error.name : 'Error';
   return `${name}: collection failed`;
 }

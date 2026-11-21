@@ -5,6 +5,14 @@
   "type": "module",
   "description": "Local-first creator analytics for Douyin, Xiaohongshu, and WeChat Channels.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CCCq-C/shanzhu-insight.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CCCq-C/shanzhu-insight/issues"
+  },
+  "homepage": "https://github.com/CCCq-C/shanzhu-insight#readme",
   "engines": {
     "node": ">=22.5"
   },

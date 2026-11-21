@@ -254,6 +254,10 @@ export function saveCollection(db, result, capturedAt) {
   const captured = new Date(capturedAt);
   const capturedIso = captured.toISOString();
   const snapshotDate = formatDate(captured);
+  const accountId = result.account.platformAccountId == null
+    ? null
+    : String(result.account.platformAccountId).trim() || null;
+  assertSameAccount(db, result.platform, accountId);
 
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -261,12 +265,12 @@ export function saveCollection(db, result, capturedAt) {
       INSERT INTO accounts (platform, platform_account_id, display_name, avatar_url)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(platform) DO UPDATE SET
-        platform_account_id = excluded.platform_account_id,
+        platform_account_id = COALESCE(excluded.platform_account_id, accounts.platform_account_id),
         display_name = excluded.display_name,
         avatar_url = excluded.avatar_url
     `).run(
       result.platform,
-      result.account.platformAccountId ?? null,
+      accountId,
       result.account.displayName ?? null,
       result.account.avatarUrl ?? null
     );
@@ -382,6 +386,17 @@ export function saveCollection(db, result, capturedAt) {
     db.exec('ROLLBACK');
     throw error;
   }
+}
+
+function assertSameAccount(db, platform, accountId) {
+  if (!accountId) return;
+  const existing = db.prepare(`
+    SELECT platform_account_id FROM accounts WHERE platform = ?
+  `).get(platform)?.platform_account_id;
+  if (!existing || String(existing) === accountId) return;
+  const error = new Error(`Different ${platform} account detected; use a separate data directory`);
+  error.name = 'AccountMismatchError';
+  throw error;
 }
 
 function migrateRoundedDouyinId(db, post, exactId) {

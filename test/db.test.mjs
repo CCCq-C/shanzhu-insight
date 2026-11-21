@@ -231,6 +231,28 @@ test('saveCollection updates same-day snapshots instead of duplicating them', ()
   assert.equal(db.prepare('SELECT views FROM metric_snapshots').get().views, 1100);
 });
 
+test('saveCollection rejects a different account without changing stored data', () => {
+  const db = createDatabase();
+  saveCollection(db, result(), new Date('2026-11-20T10:00:00+08:00'));
+
+  assert.throws(() => saveCollection(db, result({
+    account: {
+      platformAccountId: 'account-2',
+      displayName: 'Another Creator',
+      avatarUrl: null
+    }
+  }), new Date('2026-11-21T10:00:00+08:00')), {
+    name: 'AccountMismatchError'
+  });
+
+  assert.deepEqual(
+    { ...db.prepare('SELECT platform_account_id, display_name FROM accounts WHERE platform = ?').get('douyin') },
+    { platform_account_id: 'account-1', display_name: 'Creator' }
+  );
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM account_snapshots').get().count, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM platform_posts').get().count, 1);
+});
+
 test('saveCollection preserves unavailable metrics as NULL', () => {
   const db = createDatabase();
   saveCollection(db, result(), new Date('2026-11-20T10:00:00+08:00'));

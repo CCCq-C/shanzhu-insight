@@ -125,6 +125,29 @@ test('collectAll records needs_login without replacing existing data', async () 
   assert.equal(db.prepare('SELECT error FROM collector_runs').get().error.includes('abc123'), false);
 });
 
+test('collectAll reports an account mismatch without exposing account IDs', async () => {
+  const db = createDatabase();
+  saveCollection(db, { platform: 'douyin', ...collection('douyin') }, new Date('2026-11-19T10:00:00+08:00'));
+
+  const results = await collectAll({
+    db,
+    context: {},
+    collectors: [{
+      platform: 'douyin',
+      checkLogin: async () => ({ ok: true }),
+      collect: async () => collection('douyin', {
+        account: { platformAccountId: 'private-second-account-id', displayName: 'Other', avatarUrl: null }
+      })
+    }],
+    now: new Date('2026-11-20T10:00:00+08:00')
+  });
+
+  assert.equal(results[0].status, 'error');
+  assert.equal(results[0].error, '检测到不同账号，请更换独立 data 目录');
+  assert.doesNotMatch(JSON.stringify(results), /private-second-account-id/);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM platform_posts').get().count, 1);
+});
+
 test('runCli dispatches known commands and rejects unknown commands', async () => {
   const called = [];
   const output = [];

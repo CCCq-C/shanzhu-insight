@@ -15,10 +15,6 @@
 
 </div>
 
-<p align="center">
-  <img src="docs/images/dashboard.png" alt="山竹洞察数据看板" width="100%" />
-</p>
-
 ## 为什么做山竹洞察
 
 平台后台各自独立，同一条内容的播放、互动和粉丝转化很难横向比较。山竹洞察只解决一件事：
@@ -139,7 +135,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-task.ps1
 
 ### 切换账号
 
-当前每个数据目录只支持每个平台一个账号。切换同平台账号前，请先停止山竹洞察并整体备份 `data/` 目录。不要在同一数据库中交替使用多个账号。
+当前每个 `data/` 目录只支持每个平台一个账号。检测到同平台账号变化时，采集会停止，旧数据不会被覆盖或混合。
+
+如需切换账号：
+
+1. 停止山竹洞察。
+2. 将现有 `data/` 重命名为账号专属备份，例如 `data-account-a/`。
+3. 重新启动并登录新账号，程序会创建新的 `data/`。
+
+恢复旧账号时，停止程序并换回对应目录。不要合并不同账号的数据库或浏览器配置。
 
 ## ⚠️ 已知限制
 
@@ -181,6 +185,8 @@ npm run check
 3. 提交前运行 `npm test` 和 `npm run check`。
 4. 不要提交 Cookie、真实接口响应、账号 ID 或未脱敏截图。
 
+完整流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。提交问题前请使用仓库的 Issue 模板；安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
+
 ## 📜 声明
 
 本项目与抖音、小红书、微信视频号及其关联公司无官方关联。请仅采集自己有权访问的账号数据，并遵守对应平台的服务条款和所在地法律。
@@ -189,10 +195,14 @@ npm run check
 
 项目使用 [MIT License](LICENSE)。第三方依赖与设计参考见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-## 💬 联系作者
+## 💬 加入社群与商务合作
+
+想加入山竹洞察使用交流群，可以扫码添加微信。企业定制、数据看板定制或商务合作，也可以通过同一微信联系。
+
+添加时请备注：`山竹洞察社群`、`企业定制` 或 `商务合作`。
 
 <p align="center">
-  <img src="docs/images/wechat-business-qr.png" alt="微信商务合作二维码" width="180" />
+  <img src="docs/images/wechat-contact.jpg" alt="山竹洞察社群、企业定制与商务合作微信" width="260" />
   <br />
-  <sub>使用交流 · 商务合作</sub>
+  <sub>加入社群 · 企业定制 · 商务合作</sub>
 </p>

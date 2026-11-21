@@ -28,6 +28,9 @@ export function createServer({
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, 'http://127.0.0.1');
+      if (request.method === 'POST' && !isTrustedLocalMutation(request)) {
+        return sendJson(response, 403, { code: 'forbidden_request' });
+      }
       if (request.method === 'GET' && url.pathname === '/api/health') {
         return sendJson(response, 200, getHealth(db, { job, nextCollectionAt, logins }));
       }
@@ -154,6 +157,24 @@ async function collectWithBrowser(db) {
     return await collectAll({ db, context: browser.context, collectors: defaultCollectors });
   } finally {
     await browser.close();
+  }
+}
+
+function isTrustedLocalMutation(request) {
+  if (request.headers['x-shanzhu-request'] !== '1') return false;
+  let requestHost;
+  try {
+    requestHost = new URL(`http://${request.headers.host ?? ''}`);
+  } catch {
+    return false;
+  }
+  if (!['127.0.0.1', 'localhost'].includes(requestHost.hostname)) return false;
+  if (!request.headers.origin) return true;
+  try {
+    const origin = new URL(request.headers.origin);
+    return origin.protocol === 'http:' && origin.host === requestHost.host;
+  } catch {
+    return false;
   }
 }
 

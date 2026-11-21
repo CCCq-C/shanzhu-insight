@@ -208,7 +208,7 @@ test('channelsCollector recognizes the authenticated account card', async () => 
     url: () => 'https://channels.weixin.qq.com/platform',
     evaluate: async () => ({
       finderId: 'example@finder',
-      visibleText: '筷子老师AI说 视频号ID:sph74D3DJBWWT6T 视频 10 关注者 50'
+      visibleText: '示例创作者 视频号ID:sphDEMOACCOUNT001 视频 10 关注者 50'
     })
   };
 
@@ -221,7 +221,7 @@ test('channelsCollector uses the visible account card instead of the hidden app 
     evaluate: async () => ({
       finderId: 'example@finder',
       text: 'hidden app template without account data',
-      visibleText: '筷子老师AI说 视频号ID:sph74D3DJBWWT6T 视频 10 关注者 50'
+      visibleText: '示例创作者 视频号ID:sphDEMOACCOUNT001 视频 10 关注者 50'
     })
   };
 

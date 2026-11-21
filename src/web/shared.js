@@ -47,7 +47,12 @@ export function escapeHtml(value = '') {
 }
 
 export async function fetchJson(url, options) {
-  const response = await fetch(url, options);
+  const method = String(options?.method ?? 'GET').toUpperCase();
+  const requestOptions = ['GET', 'HEAD'].includes(method) ? options : {
+    ...options,
+    headers: { ...options?.headers, 'X-ShanZhu-Request': '1' }
+  };
+  const response = await fetch(url, requestOptions);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(new Error(payload.code || `HTTP ${response.status}`), { status: response.status });
   return payload;

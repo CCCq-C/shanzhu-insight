@@ -78,6 +78,49 @@ test('unknown routes return JSON 404 without exposing filesystem paths', async t
   assert.deepEqual(await response.json(), { code: 'not_found' });
 });
 
+test('state-changing APIs reject requests without the local request marker', async t => {
+  let called = false;
+  const server = await startServer({
+    db: seededDatabase(),
+    port: 0,
+    write: () => {},
+    runCollection: async () => { called = true; return []; }
+  });
+  t.after(() => close(server));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/collect`, {
+    method: 'POST',
+    headers: { Origin: 'https://attacker.example' }
+  });
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { code: 'forbidden_request' });
+  assert.equal(called, false);
+});
+
+test('state-changing APIs reject a mismatched browser origin', async t => {
+  let called = false;
+  const server = await startServer({
+    db: seededDatabase(),
+    port: 0,
+    write: () => {},
+    runCollection: async () => { called = true; return []; }
+  });
+  t.after(() => close(server));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/collect`, {
+    method: 'POST',
+    headers: {
+      Origin: 'https://attacker.example',
+      'X-ShanZhu-Request': '1'
+    }
+  });
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { code: 'forbidden_request' });
+  assert.equal(called, false);
+});
+
 test('cover route loads only the database URL for the requested post identity', async t => {
   const requested = [];
   const image = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -123,9 +166,9 @@ test('a concurrent collect request receives 409 already_running', async t => {
   t.after(() => close(server));
   const url = `http://127.0.0.1:${server.address().port}/api/collect`;
 
-  const first = fetch(url, { method: 'POST' });
+  const first = localPost(url);
   await started;
-  const second = await fetch(url, { method: 'POST' });
+  const second = await localPost(url);
   assert.equal(second.status, 409);
   assert.deepEqual(await second.json(), { code: 'already_running' });
   release();
@@ -164,7 +207,7 @@ test('platform login runs in background and blocks concurrent collection', async
   t.after(() => close(server));
   const base = `http://127.0.0.1:${server.address().port}`;
 
-  const started = await fetch(`${base}/api/login/douyin`, { method: 'POST' });
+  const started = await localPost(`${base}/api/login/douyin`);
   assert.equal(started.status, 202);
   assert.deepEqual(await started.json(), { ok: true, platform: 'douyin', status: 'running' });
 
@@ -173,7 +216,7 @@ test('platform login runs in background and blocks concurrent collection', async
   assert.equal(running.job.platform, 'douyin');
   assert.equal(running.logins.find(login => login.platform === 'douyin').status, 'running');
 
-  const blocked = await fetch(`${base}/api/collect`, { method: 'POST' });
+  const blocked = await localPost(`${base}/api/collect`);
   assert.equal(blocked.status, 409);
   assert.deepEqual(await blocked.json(), { code: 'already_running' });
 
@@ -193,7 +236,7 @@ test('login API rejects unsupported platforms without starting a job', async t =
     runLogin: async () => { called = true; }
   });
   t.after(() => close(server));
-  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/login/unknown`, { method: 'POST' });
+  const response = await localPost(`http://127.0.0.1:${server.address().port}/api/login/unknown`);
 
   assert.equal(response.status, 404);
   assert.deepEqual(await response.json(), { code: 'unsupported_platform' });
@@ -210,7 +253,7 @@ test('login API records synchronous login failures without exposing error detail
   t.after(() => close(server));
   const base = `http://127.0.0.1:${server.address().port}`;
 
-  const response = await fetch(`${base}/api/login/channels`, { method: 'POST' });
+  const response = await localPost(`${base}/api/login/channels`);
   assert.equal(response.status, 202);
   await waitFor(async () => {
     const health = await fetch(`${base}/api/health`).then(result => result.json());
@@ -254,6 +297,18 @@ function collection(platform, followers, views) {
 
 function close(server) {
   return new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+}
+
+function localPost(url, options = {}) {
+  return fetch(url, {
+    ...options,
+    method: 'POST',
+    headers: {
+      Origin: new URL(url).origin,
+      'X-ShanZhu-Request': '1',
+      ...options.headers
+    }
+  });
 }
 
 async function waitFor(predicate, timeoutMs = 1000) {
