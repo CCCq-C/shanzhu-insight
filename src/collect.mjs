@@ -10,13 +10,10 @@ export async function collectAll({
   context,
   collectors,
   now = new Date(),
-  delayMs = 2000,
   since = new Date(new Date(now).getTime() - 90 * 24 * 60 * 60 * 1000),
   limit = 100
 }) {
-  const results = [];
-
-  for (const [index, collector] of collectors.entries()) {
+  return await Promise.all(collectors.map(async collector => {
     const startedAt = new Date(now).toISOString();
     const run = db.prepare(`
       INSERT INTO collector_runs (platform, started_at, status)
@@ -73,14 +70,8 @@ export async function collectAll({
       outcome.status === 'error' ? outcome.error : outcome.error ?? null,
       run.lastInsertRowid
     );
-    results.push(outcome);
-
-    if (delayMs > 0 && index < collectors.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-  }
-
-  return results;
+    return outcome;
+  }));
 }
 
 function sanitizeError(error) {

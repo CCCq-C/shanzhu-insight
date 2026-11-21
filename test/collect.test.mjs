@@ -32,7 +32,7 @@ function collection(platform, overrides = {}) {
   };
 }
 
-test('collectAll runs collectors serially and records successful runs', async () => {
+test('collectAll runs collectors concurrently and records successful runs', async () => {
   const db = createDatabase();
   let active = 0;
   let maximumActive = 0;
@@ -56,7 +56,7 @@ test('collectAll runs collectors serially and records successful runs', async ()
     delayMs: 0
   });
 
-  assert.equal(maximumActive, 1);
+  assert.equal(maximumActive, 2);
   assert.deepEqual(results.map(({ status }) => status), ['success', 'success']);
   assert.deepEqual(
     db.prepare('SELECT platform, status FROM collector_runs ORDER BY id').all()
