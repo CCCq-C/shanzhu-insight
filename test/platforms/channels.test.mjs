@@ -197,7 +197,7 @@ test('channelsCollector detects login UI inside the Wujie shadow root', async ()
 test('channelsCollector does not report login before the authenticated shell loads', async () => {
   const page = {
     url: () => 'https://channels.weixin.qq.com/platform',
-    evaluate: async () => ({ finderId: 'example@finder', text: '' })
+    evaluate: async () => ({ finderId: 'example@finder', visibleText: '' })
   };
 
   assert.equal(await channelsCollector.isLoggedIn(page), false);
@@ -208,7 +208,20 @@ test('channelsCollector recognizes the authenticated account card', async () => 
     url: () => 'https://channels.weixin.qq.com/platform',
     evaluate: async () => ({
       finderId: 'example@finder',
-      text: '筷子老师AI说 视频号ID:sph74D3DJBWWT6T 视频 10 关注者 50'
+      visibleText: '筷子老师AI说 视频号ID:sph74D3DJBWWT6T 视频 10 关注者 50'
+    })
+  };
+
+  assert.equal(await channelsCollector.isLoggedIn(page), true);
+});
+
+test('channelsCollector uses the visible account card instead of the hidden app template', async () => {
+  const page = {
+    url: () => 'https://channels.weixin.qq.com/platform',
+    evaluate: async () => ({
+      finderId: 'example@finder',
+      text: 'hidden app template without account data',
+      visibleText: '筷子老师AI说 视频号ID:sph74D3DJBWWT6T 视频 10 关注者 50'
     })
   };
 
@@ -227,7 +240,7 @@ test('channelsCollector trusts a rejected auth response over stale page state', 
     },
     goto: async () => {},
     url: () => 'https://channels.weixin.qq.com/platform',
-    evaluate: async () => ({ finderId: 'example@finder', text: '' }),
+    evaluate: async () => ({ finderId: 'example@finder', visibleText: '' }),
     close: async () => {}
   };
 
