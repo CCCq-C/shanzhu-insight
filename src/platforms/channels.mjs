@@ -3,6 +3,7 @@ const POSTS_URL = 'https://channels.weixin.qq.com/platform/statistic/post';
 const FANS_URL = 'https://channels.weixin.qq.com/platform/statistic/follower';
 const POST_LIST_MARKER = '/statistic/post_list';
 const FANS_TREND_MARKER = '/statistic/fans_trend';
+const AUTH_INFO_MARKER = '/auth/get_auth_info';
 
 export const channelsCollector = {
   platform: 'channels',
@@ -169,7 +170,17 @@ export async function collectChannels({ context, since, limit = 100, now = new D
 async function checkChannelsLogin({ context }) {
   const page = await context.newPage();
   try {
+    const authResponsePromise = page.waitForResponse
+      ? page.waitForResponse(response => response.url().includes(AUTH_INFO_MARKER), { timeout: 10000 }).catch(() => null)
+      : Promise.resolve(null);
     await page.goto(HOME_URL, { waitUntil: 'domcontentloaded' });
+    const authResponse = await authResponsePromise;
+    if (authResponse) {
+      const payload = await authResponse.json().catch(() => null);
+      if (payload?.errCode != null) {
+        return Number(payload.errCode) === 0 ? { ok: true } : { ok: false, reason: 'Login required' };
+      }
+    }
     return await isChannelsLoggedIn(page) ? { ok: true } : { ok: false, reason: 'Login required' };
   } finally {
     await page.close();
@@ -177,12 +188,15 @@ async function checkChannelsLogin({ context }) {
 }
 
 async function isChannelsLoggedIn(page) {
-  const loginVisible = /\/login(?:[/?#]|$)/i.test(page.url()) || await page.evaluate(() => {
+  if (/\/login(?:\.html)?(?:[/?#]|$)/i.test(page.url())) return false;
+  return page.evaluate(() => {
+    const finderId = String(localStorage.getItem('finder_username') ?? '').trim();
     const root = document.querySelector('wujie-app')?.shadowRoot ?? document;
     const text = root.body?.innerText ?? root.textContent ?? '';
-    return /扫码登录|登录视频号助手|请登录/.test(text);
+    const loginVisible = /扫码登录|登录视频号助手|请登录/.test(text);
+    const authenticatedShell = /首页/.test(text) && /内容管理|数据中心/.test(text);
+    return Boolean(finderId) && !loginVisible && authenticatedShell;
   });
-  return !loginVisible;
 }
 
 function readIdentity(page) {

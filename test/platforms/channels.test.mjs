@@ -173,8 +173,47 @@ test('collectChannels consumes the pending response wait when tab activation fai
 test('channelsCollector detects login UI inside the Wujie shadow root', async () => {
   const page = {
     goto: async () => {},
+    url: () => 'https://channels.weixin.qq.com/login.html',
+    evaluate: async () => false,
+    close: async () => {}
+  };
+
+  assert.deepEqual(await channelsCollector.checkLogin({
+    context: { newPage: async () => page }
+  }), { ok: false, reason: 'Login required' });
+});
+
+test('channelsCollector does not report login before the authenticated shell loads', async () => {
+  const page = {
     url: () => 'https://channels.weixin.qq.com/platform',
-    evaluate: async () => true,
+    evaluate: async () => false
+  };
+
+  assert.equal(await channelsCollector.isLoggedIn(page), false);
+});
+
+test('channelsCollector reports login only after the authenticated shell loads', async () => {
+  const page = {
+    url: () => 'https://channels.weixin.qq.com/platform',
+    evaluate: async () => true
+  };
+
+  assert.equal(await channelsCollector.isLoggedIn(page), true);
+});
+
+test('channelsCollector trusts a rejected auth response over stale page state', async () => {
+  const response = {
+    url: () => 'https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/auth/get_auth_info',
+    json: async () => ({ errCode: 300334, errMsg: 'request failed' })
+  };
+  const page = {
+    waitForResponse: async predicate => {
+      assert.equal(predicate(response), true);
+      return response;
+    },
+    goto: async () => {},
+    url: () => 'https://channels.weixin.qq.com/platform',
+    evaluate: async () => false,
     close: async () => {}
   };
 

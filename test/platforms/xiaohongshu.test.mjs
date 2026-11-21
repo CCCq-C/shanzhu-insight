@@ -219,6 +219,40 @@ test('collectXiaohongshu keeps the first page when protected pagination is rejec
   assert.deepEqual(result.warnings, ['笔记后续分页请求被平台拒绝']);
 });
 
+test('collectXiaohongshu skips protected legacy pagination when signed analysis is complete', async () => {
+  const analysisPayload = {
+    code: 0,
+    success: true,
+    data: {
+      total: 2,
+      note_infos: postedFixture.data.notes.map(note => ({
+        id: note.id,
+        title: note.display_title,
+        post_time: note.visible_time,
+        cover_url: note.images_list[0].url,
+        read_count: note.view_count
+      }))
+    }
+  };
+  const { context, requestedUrls } = fakeContext({
+    analysisPayload,
+    analysisPages: [analysisPayload],
+    paginationError: new Error('HTTP 406')
+  });
+
+  const result = await collectXiaohongshu({
+    context,
+    since: new Date('2026-11-01T00:00:00.000Z'),
+    limit: 20,
+    now: new Date('2026-11-20T00:00:00.000Z')
+  });
+
+  assert.equal(result.posts.length, 2);
+  assert.equal(result.partial, false);
+  assert.deepEqual(result.warnings, []);
+  assert.equal(requestedUrls.some(url => url.includes('/note/user/posted')), false);
+});
+
 test('collectXiaohongshu keeps basic metrics when content analysis is unavailable', async () => {
   const { context } = fakeContext({ analysisError: new Error('HTTP 404') });
 

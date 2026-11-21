@@ -4,17 +4,20 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 
-const blockedAddresses = new net.BlockList();
+const blockedAddresses = {
+  ipv4: new net.BlockList(),
+  ipv6: new net.BlockList()
+};
 for (const [network, prefix] of [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
   ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
   ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
   ['224.0.0.0', 4], ['240.0.0.0', 4]
-]) blockedAddresses.addSubnet(network, prefix, 'ipv4');
+]) blockedAddresses.ipv4.addSubnet(network, prefix, 'ipv4');
 for (const [network, prefix] of [
   ['::', 128], ['::1', 128], ['::ffff:0:0', 96], ['fc00::', 7],
   ['fe80::', 10], ['ff00::', 8], ['2001:db8::', 32]
-]) blockedAddresses.addSubnet(network, prefix, 'ipv6');
+]) blockedAddresses.ipv6.addSubnet(network, prefix, 'ipv6');
 
 const PLACEHOLDER = Buffer.from(`
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
@@ -103,7 +106,7 @@ async function isPublicTarget(target) {
 
 function isPublicAddress(address, family) {
   const type = Number(family) === 6 ? 'ipv6' : 'ipv4';
-  return !blockedAddresses.check(address, type);
+  return !blockedAddresses[type].check(address, type);
 }
 
 async function readLimited(stream, maxBytes) {

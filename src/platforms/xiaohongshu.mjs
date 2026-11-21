@@ -165,11 +165,14 @@ export async function collectXiaohongshu({ context, since, limit = 100, now = ne
     let hasMore = parsed.hasMore;
     let nextPage = parsed.nextPage;
     let cursorStuck = false;
+    let analysisComplete = false;
     addPage(parsed, allPosts, allMetrics, limit);
     if (analysisPayload) {
       const analysis = parseXiaohongshuAnalysis(analysisPayload);
       addPage(analysis, allPosts, allMetrics, limit);
       reportedTotal = Math.max(reportedTotal, analysis.reportedTotal, allPosts.size);
+      analysisComplete = analysis.reportedTotal > 0 && analysis.posts.length >= analysis.reportedTotal;
+      if (analysisComplete) hasMore = false;
     }
 
     while (hasMore && allPosts.size < limit) {

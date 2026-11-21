@@ -108,6 +108,26 @@ test('cover store rejects loopback targets before fetching', async t => {
   assert.equal(requests, 0);
 });
 
+test('cover store allows a public IPv4 target', async t => {
+  let requests = 0;
+  const store = createCoverStore({
+    cacheDir: tempDirectory(t),
+    fetchImpl: async () => {
+      requests += 1;
+      return new Response(PNG, { status: 200, headers: { 'Content-Type': 'image/png' } });
+    }
+  });
+
+  const result = await store.getCover({
+    platform: 'douyin',
+    postId: 'post-public',
+    url: 'http://8.8.8.8/cover.png'
+  });
+
+  assert.equal(result.placeholder, false);
+  assert.equal(requests, 1);
+});
+
 test('cover store revalidates every redirect target', async t => {
   const checked = [];
   let requests = 0;
