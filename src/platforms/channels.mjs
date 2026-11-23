@@ -40,7 +40,7 @@ export function parseChannelsPostList(payload, { currentPage = 1 } = {}) {
       comments: metric(item?.commentCount),
       favorites: null,
       shares: metric(item?.forwardAggregationCount ?? item?.forwardCount),
-      durationSeconds: millisecondsToSeconds(media.videoPlayLen),
+      durationSeconds: numberMetric(media.videoPlayLen),
       averageWatchSeconds: numberMetric(item?.avgPlayTimeSec),
       completionRate: numberMetric(item?.fullPlayRate),
       fiveSecondCompletionRate: null,
@@ -266,11 +266,6 @@ function numberMetric(value) {
   if (value == null || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
-}
-
-function millisecondsToSeconds(value) {
-  const number = numberMetric(value);
-  return number == null ? null : number / 1000;
 }
 
 function epochToIso(value) {

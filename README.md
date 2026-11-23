@@ -15,6 +15,21 @@
 
 </div>
 
+## 界面预览
+
+一屏查看跨平台内容表现、粉丝资产、账号健康度和近期趋势。以下界面全部使用脱敏演示数据。
+
+<p align="center">
+  <img src="docs/images/dashboard-overview.png" alt="山竹洞察总览看板" width="100%" />
+</p>
+
+<p align="center">
+  <img src="docs/images/content-archive.png" alt="山竹洞察内容档案" width="49%" />
+  <img src="docs/images/content-comparison.png" alt="山竹洞察单条内容跨平台对比" width="49%" />
+  <br />
+  <sub>内容档案 · 单条内容跨平台深度指标对比</sub>
+</p>
+
 ## 为什么做山竹洞察
 
 平台后台各自独立，同一条内容的播放、互动和粉丝转化很难横向比较。山竹洞察只解决一件事：

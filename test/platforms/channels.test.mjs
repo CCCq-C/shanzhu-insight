@@ -65,6 +65,17 @@ test('parseChannelsPostList uses short title fallback and keeps absent metrics n
   });
 });
 
+test('parseChannelsPostList keeps videoPlayLen in seconds', () => {
+  const payload = structuredClone(postFixture);
+  payload.data.list[0].desc.media[0].videoPlayLen = 225;
+  payload.data.list[0].avgPlayTimeSec = 18.4;
+
+  const result = parseChannelsPostList(payload);
+
+  assert.equal(result.metrics[0].durationSeconds, 225);
+  assert.ok(result.metrics[0].averageWatchSeconds / result.metrics[0].durationSeconds < 1);
+});
+
 test('parseChannelsFans uses the latest total and local account identity', () => {
   assert.deepEqual(parseChannelsFans([fansFixture, {
     finderId: 'example@finder',

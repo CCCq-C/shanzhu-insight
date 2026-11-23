@@ -22,7 +22,7 @@
               "coverUrl": "https://example.test/channels/cover-001.jpg",
               "fullCoverUrl": "https://example.test/channels/full-cover-001.jpg",
               "thumbUrl": "https://example.test/channels/thumb-001.jpg",
-              "videoPlayLen": 41000
+              "videoPlayLen": 41
             }
           ]
         }
@@ -40,7 +40,7 @@
           "media": [
             {
               "thumbUrl": "https://example.test/channels/thumb-002.jpg",
-              "videoPlayLen": 30000
+              "videoPlayLen": 30
             }
           ]
         }

@@ -98,6 +98,30 @@ test('initSchema adds deep metric columns to an existing database', () => {
   ]) assert.equal(columns.includes(name), true, name);
 });
 
+test('initSchema repairs historical Channels durations divided by 1000', () => {
+  const db = createDatabase();
+  const contentId = Number(db.prepare(`
+    INSERT INTO contents (normalized_title, title, published_at) VALUES ('sample', 'Sample', ?)
+  `).run('2026-11-20T00:00:00.000Z').lastInsertRowid);
+  db.prepare(`
+    INSERT INTO platform_posts (platform, post_id, content_id, title, published_at)
+    VALUES ('channels', 'channels-duration', ?, 'Sample', ?)
+  `).run(contentId, '2026-11-20T00:00:00.000Z');
+  db.prepare(`
+    INSERT INTO metric_snapshots (
+      platform, post_id, snapshot_date, captured_at, duration_seconds, average_watch_seconds
+    ) VALUES ('channels', 'channels-duration', '2026-11-20', ?, 0.225, 18.4)
+  `).run('2026-11-20T10:00:00.000Z');
+
+  initSchema(db);
+  initSchema(db);
+
+  assert.equal(db.prepare(`
+    SELECT duration_seconds FROM metric_snapshots
+    WHERE platform = 'channels' AND post_id = 'channels-duration'
+  `).get().duration_seconds, 225);
+});
+
 test('saveCollection backfills real follower history before the current snapshot', () => {
   const db = createDatabase();
   saveCollection(db, result({

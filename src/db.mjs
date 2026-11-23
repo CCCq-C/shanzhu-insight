@@ -91,6 +91,7 @@ export function initSchema(db) {
     );
   `);
   ensureMetricColumns(db);
+  repairChannelsDurationUnits(db);
   reconcileContentGroups(db);
 }
 
@@ -109,6 +110,19 @@ function ensureMetricColumns(db) {
   for (const [name, type] of Object.entries(columns)) {
     if (!existing.has(name)) db.exec(`ALTER TABLE metric_snapshots ADD COLUMN ${name} ${type}`);
   }
+}
+
+function repairChannelsDurationUnits(db) {
+  db.exec(`
+    UPDATE metric_snapshots
+    SET duration_seconds = duration_seconds * 1000
+    WHERE platform = 'channels'
+      AND duration_seconds > 0
+      AND duration_seconds < 1
+      AND average_watch_seconds IS NOT NULL
+      AND average_watch_seconds > duration_seconds
+      AND average_watch_seconds <= duration_seconds * 1000
+  `);
 }
 
 export function pairContent(db, post, platform = null) {
